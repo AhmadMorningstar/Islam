@@ -1,20 +1,26 @@
-# Data Deletion Policy – Islam app
+# Islam — Android App
 
-**Developer:** Ahmad Morningstar  
-**App Name:** Islam
+Welcome to **Islam**, a Google Play Store application designed to serve our fellow Muslim brothers and sisters. This app provides practical tools to help users access accurate Islamic information conveniently, wherever they are. Our goal is to make religious practices easier and more precise through modern technology.
 
-## Data Collection
-This app only accesses your **device location** (GPS, Wi-Fi, and mobile network) to calculate the direction of the Qibla.  
-No data is collected, shared, or stored on any remote servers.
+Currently, the app features:  
+- **Qibla Finder** — Instantly determine the direction of the Kaaba using your device’s location and sensors for maximum accuracy.  
+- **Distance Measurement** — See the distance from your current location to the Kaaba in real-time.  
+- **Visual Compass** — A smooth, easy-to-read compass with alignment indicators.
 
-## Data Deletion
-The Qibla Finder app **does not store any personal data**.  
-All data used (like your current location and compass direction) exists only temporarily in your device’s memory.  
+### Upcoming Features
+We are continuously working on adding more helpful features, including:  
+- Prayer times notifications  
+- Hijri calendar integration  
+- Additional Islamic educational resources  
 
-Once the app is **closed or uninstalled**, all related data is permanently deleted automatically.
+### Data Safety & Privacy
+Your privacy is our priority. All sensitive data, such as your location and device sensor data, is processed locally on your device and **never shared with third parties**.
 
-## Request Data Deletion
-Since no data is stored, there is nothing to delete.  
-However, if you have any questions or want to confirm, you can contact me via email:
+- **[Data Safety Information](./data-safety.md)** — Learn what data the app collects, why, and how it is handled.  
+- **[Privacy Policy](./privacy-policy.md)** — Detailed policy explaining how your information is used and protected.
 
-📧 **ahmadmorningstarr@gmail.com**
+### Contact
+For questions, feedback, or support, please contact:  
+**Email:** ahmadmorningstarr@gmail.com
+
+Thank you for using **Islam**. We are committed to providing reliable tools and continuing to improve the app for the entire Muslim community.
