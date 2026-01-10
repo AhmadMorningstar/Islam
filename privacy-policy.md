@@ -1,6 +1,6 @@
 # Privacy Policy — Islam app
 
-**Last updated:** 2025-10-30
+**Last updated:** 2026-01-10
 
 Thank you for using Islam app. Your privacy is important. This Privacy Policy explains what data the app accesses and how that data is used.
 
@@ -17,7 +17,8 @@ Thank you for using Islam app. Your privacy is important. This Privacy Policy ex
 
 ## Permissions
 - `ACCESS_FINE_LOCATION` — required to calculate the Qibla direction and distance.  
-- `ACCESS_COARSE_LOCATION` / `INTERNET` — optional, used for map features.
+- `ACCESS_COARSE_LOCATION` - optional, used for map features.
+- `INTERNET` — required for Google Play services such as app updates and integrity checks.
 
 ## Data Retention
 - The app does not store your location or sensor data beyond what is required for immediate calculation. Uninstalling the app deletes all local data.  
