@@ -10,10 +10,10 @@ android {
 
     defaultConfig {
         applicationId = "com.AhmadMorningstar.islam"
-        minSdk = 29
+        minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "2.0"
+        versionCode = 4
+        versionName = "4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -39,8 +39,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
     }
 }
 
@@ -72,6 +75,13 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
+    // Latest In-App Update
+    implementation(libs.app.update)
+    implementation(libs.play.app.update.ktx)
+
+    // Play Integrity API for Authenticity Checks
+    implementation(libs.integrity)
 }
 /*
 dependencies {

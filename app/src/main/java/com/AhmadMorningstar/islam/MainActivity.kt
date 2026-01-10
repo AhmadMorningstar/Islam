@@ -1,69 +1,262 @@
 package com.AhmadMorningstar.islam
 
-import android.graphics.Paint
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Paint
+import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
-import android.location.LocationManager
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
-import com.google.android.gms.location.*
-import kotlin.math.*
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.imageResource
-import androidx.compose.ui.unit.IntSize
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
+import com.google.android.play.core.integrity.IntegrityManagerFactory
+import com.google.android.play.core.integrity.IntegrityTokenRequest
+
+// ---------------------------------------------------------------------------
+// THEME CONFIGURATION
+// ---------------------------------------------------------------------------
+data class CompassTheme(
+    val name: String,
+    val isDark: Boolean,
+    val backgroundColor: Color,
+    val surfaceColor: Color,
+    val tickColor: Color,
+    val northColor: Color,
+    val needleDefaultColor: Color,
+    val needleAlignedColor: Color,
+    val textColor: Color,
+)
+
+object AppThemes {
+    val Obsidian = CompassTheme(
+        "Obsidian Dark", true, Color(0xFF0A0E12), Color.White.copy(0.05f),
+        Color.White, Color.Red, Color(0xFFFF3D00), Color(0xFF00FF88), Color.White
+    )
+    val PureLight = CompassTheme(
+        "Pure Light", false, Color(0xFFF5F5F7), Color.Black.copy(0.05f),
+        Color.DarkGray, Color.Red, Color(0xFF2C3E50), Color(0xFF27AE60), Color(0xFF1C1C1E)
+    )
+    val EmeraldNight = CompassTheme(
+        "Emerald Night", true, Color(0xFF06120E), Color.White.copy(0.03f),
+        Color(0xFF81C784), Color.Red, Color(0xFF4DB6AC), Color(0xFF00E676), Color.White
+    )
+    val DesertGold = CompassTheme(
+        "Desert Gold", false, Color(0xFFFFF8E1), Color(0xFF795548).copy(0.1f),
+        Color(0xFF5D4037), Color.Red, Color(0xFF8D6E63), Color(0xFFFFA000), Color(0xFF3E2723)
+    )
+
+    val OceanDeep = CompassTheme(
+        name = "Ocean Deep",
+        isDark = true,
+        backgroundColor = Color(0xFF010B13), // Very dark navy
+        surfaceColor = Color(0xFF0A1929),    // Lighter navy surface
+        tickColor = Color(0xFF64B5F6),       // Light blue ticks
+        northColor = Color(0xFFFF5252),      // Bright coral north
+        needleDefaultColor = Color(0xFF00B0FF), // Vivid blue needle
+        needleAlignedColor = Color(0xFF00E5FF), // Cyan alignment
+        textColor = Color(0xFFE3F2FD)        // Soft blue-white text
+    )
+
+    val allThemes = listOf(Obsidian, PureLight, EmeraldNight, DesertGold, OceanDeep)
+}
+
+enum class Screen { Home, Settings }
 
 class MainActivity : ComponentActivity() {
+
+    private val updateResultLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) {
+            // If the update was cancelled or failed, check again to "lock" the app
+            checkForUpdates()
+        }
+    }
+    private lateinit var themePrefs: ThemePreferences
+    private val currentScreen = mutableStateOf(Screen.Home)
+    private val currentThemeState = mutableStateOf(AppThemes.Obsidian)
     private lateinit var sensorManager: SensorManager
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     private val kaabaLat = 21.422487
     private val kaabaLon = 39.826206
 
-    private val isDeviceFlatState = mutableStateOf(true)
+    private var smoothedNorth = 0f
+    private val smoothingFactor = 0.15f
+    private var lastDeclination = 0f
 
+    private val isDeviceFlatState = mutableStateOf(true)
     private val locationState = mutableStateOf<Location?>(null)
     private val sensorAccuracyState = mutableStateOf(SensorManager.SENSOR_STATUS_UNRELIABLE)
     private val northDirectionState = mutableStateOf(0f)
+    private val magneticStrengthState = mutableStateOf(0f)
+
+    val sunAzimuthState = derivedStateOf {
+        locationState.value?.let { loc -> calculateSunAzimuth(loc.latitude, loc.longitude) }
+    }
+
     private val qiblaDirectionState = derivedStateOf {
-        locationState.value?.let { loc ->
-            calculateQibla(loc.latitude, loc.longitude)
+        locationState.value?.let { loc -> calculateQibla(loc.latitude, loc.longitude) }
+    }
+
+    private val distanceToKaabaState = derivedStateOf {
+        locationState.value?.let { loc -> calculateDistance(loc.latitude, loc.longitude) }
+    }
+
+    private fun checkForUpdates() {
+        val appUpdateManager = AppUpdateManagerFactory.create(this)
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
+            if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+            ) {
+                // Launch the "Force Update" screen
+                appUpdateManager.startUpdateFlowForResult(
+                    info,
+                    updateResultLauncher,
+                    AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                )
+            }
         }
+    }
+
+    private fun calculateSunAzimuth(lat: Double, lon: Double): Double {
+        // 1. Load the saved timezone
+        val tzId = themePrefs.getSavedTimezone()
+        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(tzId))
+
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val minute = calendar.get(java.util.Calendar.MINUTE)
+
+        val dayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
+        val totalHours = hour + (minute / 60.0)
+
+        // ... rest of your existing math ...
+        val decl = 23.45 * kotlin.math.sin(Math.toRadians(360.0 / 365.0 * (dayOfYear - 81)))
+        val latRad = Math.toRadians(lat)
+        val declRad = Math.toRadians(decl)
+        val hourAngle = Math.toRadians(15.0 * (totalHours - 12.0))
+        val y = -kotlin.math.sin(hourAngle)
+        val x = (kotlin.math.cos(latRad) * kotlin.math.tan(declRad)) -
+                (kotlin.math.sin(latRad) * kotlin.math.cos(hourAngle))
+
+        return (Math.toDegrees(kotlin.math.atan2(y, x)) + 360) % 360
+    }
+
+    private fun calculateMoonAzimuth(lat: Double, lon: Double): Double {
+        val tzId = themePrefs.getSavedTimezone()
+        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(tzId))
+
+        val dayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val minute = calendar.get(java.util.Calendar.MINUTE)
+        val totalHours = hour + (minute / 60.0)
+
+        // The Moon moves approx 13.17° per day relative to stars
+        // This is a robust approximation for visual calibration
+        val moonPhaseAngle = (dayOfYear % 29.5) * (360 / 29.5)
+        val hourAngle = Math.toRadians(15.0 * (totalHours - 12.0) - moonPhaseAngle)
+
+        val latRad = Math.toRadians(lat)
+        val y = -kotlin.math.sin(hourAngle)
+        val x = (kotlin.math.cos(latRad) * 0.3) - (kotlin.math.sin(latRad) * kotlin.math.cos(hourAngle))
+
+        return (Math.toDegrees(kotlin.math.atan2(y, x)) + 360) % 360
+    }
+
+    private fun verifyAppAuthenticity() {
+        val integrityManager = IntegrityManagerFactory.create(applicationContext)
+
+        // Nonce should be a random secure string (unique per session)
+        val nonce = "AhmadMorningstar_" + System.currentTimeMillis()
+
+        val integrityTokenRequest = IntegrityTokenRequest.builder()
+            .setNonce(nonce)
+            .build()
+
+        integrityManager.requestIntegrityToken(integrityTokenRequest)
+            .addOnSuccessListener { response ->
+                val token = response.token()
+                // Log this or send to your server.
+                // If the token is invalid, the user is likely using a pirated/modded version.
+            }
+            .addOnFailureListener { e ->
+                // This happens if the device is rooted, no Play Services, or tampered.
+                // You can choose to show a "Security Alert" dialog here.
+            }
+    }
+
+    // Add this state variable in MainActivity along with the others
+    val moonAzimuthState = derivedStateOf {
+        locationState.value?.let { loc -> calculateMoonAzimuth(loc.latitude, loc.longitude) }
     }
 
     private val sensorEventListener = object : SensorEventListener {
@@ -74,23 +267,23 @@ class MainActivity : ComponentActivity() {
                 val orientation = FloatArray(3)
                 SensorManager.getOrientation(rotationMatrix, orientation)
 
-                // orientation[0] is Azimuth (North direction) in radians.
-                var degree = Math.toDegrees(orientation[0].toDouble()).toFloat()
-                if (degree < 0) degree += 360f
-                northDirectionState.value = degree
+                var rawDegree = Math.toDegrees(orientation[0].toDouble()).toFloat()
+                if (rawDegree < 0) rawDegree += 360f
 
-                // --- NEW CODE STARTS HERE ---
-                // orientation[1] is Pitch (tilt forward/backward) in radians.
-                // orientation[2] is Roll (tilt left/right) in radians.
-                val pitch = Math.toDegrees(orientation[1].toDouble())
-                val roll = Math.toDegrees(orientation[2].toDouble())
+                val correctedDegree = (rawDegree + lastDeclination + 360) % 360
+                smoothedNorth =
+                    smoothedNorth + smoothingFactor * shortestAngle(smoothedNorth, correctedDegree)
+                northDirectionState.value = (smoothedNorth + 360) % 360
 
-                // Define a threshold. If tilt exceeds this, we consider it "not flat".
-                val flatThreshold = 25.0 // in degrees
+                isDeviceFlatState.value = abs(Math.toDegrees(orientation[1].toDouble())) < 25.0 &&
+                        abs(Math.toDegrees(orientation[2].toDouble())) < 25.0
+            }
 
-                // Update the state based on whether pitch and roll are within the threshold.
-                isDeviceFlatState.value = abs(pitch) < flatThreshold && abs(roll) < flatThreshold
-                // --- NEW CODE ENDS HERE ---
+            if (event?.sensor?.type == Sensor.TYPE_MAGNETIC_FIELD) {
+                val values = event.values
+                val magnitude =
+                    sqrt((values[0] * values[0] + values[1] * values[1] + values[2] * values[2]).toDouble()).toFloat()
+                magneticStrengthState.value = magnitude
             }
         }
 
@@ -99,452 +292,644 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(result: LocationResult) {
-            result.lastLocation?.let { loc ->
-                locationState.value = loc
-            }
-        }
-    }
+    data class VibrationSettings(
+        val strength: Int = 255, // 1 to 255
+        val speed: Long = 100,    // Delay in milliseconds
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        verifyAppAuthenticity()
+        checkForUpdates()
+
         super.onCreate(savedInstanceState)
+        themePrefs = ThemePreferences(this)
+        val savedName = themePrefs.getSavedThemeName()
+        val themeToLoad = AppThemes.allThemes.find { it.name == savedName } ?: AppThemes.Obsidian
+        currentThemeState.value = themeToLoad
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         setContent {
-            val qiblaDirection = qiblaDirectionState.value
-            val northDirection = northDirectionState.value
-            val sensorAccuracy = sensorAccuracyState.value
-            val location = locationState.value
-            val isDeviceFlat = isDeviceFlatState.value
+            val screen by currentScreen
+            val theme by currentThemeState
 
-            QiblaCompassUI(
-                qiblaDirection = qiblaDirection,
-                northDirection = northDirection,
-                sensorAccuracy = sensorAccuracy,
-                location = location?.let { Pair(it.latitude, it.longitude) },
-                isDeviceFlat = isDeviceFlat
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(theme.backgroundColor)
+            ) {
+                when (screen) {
+                    Screen.Home -> {
+                        QiblaCompassUI(
+                            theme = theme,
+                            qiblaDirection = qiblaDirectionState.value,
+                            northDirection = northDirectionState.value,
+                            distance = distanceToKaabaState.value,
+                            sensorAccuracy = sensorAccuracyState.value,
+                            magneticStrength = magneticStrengthState.value,
+                            location = locationState.value?.let { Pair(it.latitude, it.longitude) },
+                            isDeviceFlat = isDeviceFlatState.value
+                        )
+                    }
+
+                    Screen.Settings -> {
+                        SettingsUI(
+                            theme = theme,
+                            onThemeSelected = { newTheme ->
+                                currentThemeState.value = newTheme
+                                themePrefs.saveTheme(newTheme.name)
+                            }
+                        )
+                    }
+                }
+
+                ModernBottomNav(screen, { currentScreen.value = it }, theme)
+            }
 
             DisposableEffect(Unit) {
-                val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-                sensorManager.registerListener(sensorEventListener, sensor, SensorManager.SENSOR_DELAY_UI)
-                onDispose {
-                    sensorManager.unregisterListener(sensorEventListener)
-                }
+                val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+                val magSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+                sensorManager.registerListener(
+                    sensorEventListener,
+                    rotationSensor,
+                    SensorManager.SENSOR_DELAY_UI
+                )
+                sensorManager.registerListener(
+                    sensorEventListener,
+                    magSensor,
+                    SensorManager.SENSOR_DELAY_UI
+                )
+                onDispose { sensorManager.unregisterListener(sensorEventListener) }
             }
         }
     }
 
-    private fun checkLocationAndStartUpdates() {
-        if (!isLocationEnabled()) {
-            promptToEnableLocation()
-        } else {
-            requestLocationPermission()
-        }
-    }
 
-    private val requestPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) startLocationUpdates()
-        }
 
-    private fun requestLocationPermission() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            startLocationUpdates()
-        } else {
-            requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-    }
 
-    private fun startLocationUpdates() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-
-        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-            if (location != null) {
-                locationState.value = location
-            }
-        }
-
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).build()
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
-    }
-
-    private fun isLocationEnabled(): Boolean {
-        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-    }
-
-    private fun promptToEnableLocation() {
-        AlertDialog.Builder(this)
-            .setMessage("Your location service is disabled. Please enable it to find the Qibla direction.")
-            .setPositiveButton("Enable Location") { _, _ ->
-                val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                startActivity(intent)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+    private fun calculateDistance(lat1: Double, lon1: Double): Double {
+        val r = 6371.0
+        val dLat = Math.toRadians(kaabaLat - lat1)
+        val dLon = Math.toRadians(kaabaLon - lon1)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(kaabaLat)) *
+                sin(dLon / 2) * sin(dLon / 2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return r * c
     }
 
     private fun calculateQibla(userLat: Double, userLon: Double): Double {
         val deltaLon = Math.toRadians(kaabaLon - userLon)
         val lat1 = Math.toRadians(userLat)
         val lat2 = Math.toRadians(kaabaLat)
-
         val y = sin(deltaLon) * cos(lat2)
         val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(deltaLon)
-        val bearing = (Math.toDegrees(atan2(y, x)) + 360) % 360
+        return (Math.toDegrees(atan2(y, x)) + 360) % 360
+    }
 
-        return bearing
+    private fun updateLocationAndDeclination(loc: Location) {
+        locationState.value = loc
+        lastDeclination = GeomagneticField(
+            loc.latitude.toFloat(),
+            loc.longitude.toFloat(),
+            loc.altitude.toFloat(),
+            System.currentTimeMillis()
+        ).declination
+    }
+
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            result.lastLocation?.let { updateLocationAndDeclination(it) }
+        }
+    }
+
+    private fun checkLocationAndStartUpdates() {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) startLocationUpdates()
+        else requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) startLocationUpdates() }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        fusedLocationClient.lastLocation.addOnSuccessListener {
+            it?.let {
+                updateLocationAndDeclination(
+                    it
+                )
+            }
+        }
+        val locationRequest =
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000L).build()
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
     }
 
     override fun onResume() {
-        super.onResume()
-        checkLocationAndStartUpdates()
+        super.onResume(); checkLocationAndStartUpdates()
     }
 
     override fun onPause() {
-        super.onPause()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+        super.onPause(); fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GLOBAL UTILITIES
+// ---------------------------------------------------------------------------
+fun shortestAngle(from: Float, to: Float): Float {
+    var diff = to - from
+    while (diff < -180) diff += 360
+    while (diff > 180) diff -= 360
+    return diff
+}
+
+// ---------------------------------------------------------------------------
+// UI COMPONENTS
+// ---------------------------------------------------------------------------
+
+@Composable
+fun ModernBottomNav(
+    currentScreen: Screen,
+    onScreenSelected: (Screen) -> Unit,
+    theme: CompassTheme,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            color = if (!theme.isDark) Color.White else Color(0xFF1A1F24).copy(0.95f),
+            shape = RoundedCornerShape(28.dp),
+            border = BorderStroke(1.dp, theme.textColor.copy(alpha = 0.1f)),
+            modifier = Modifier
+                .height(72.dp)
+                .fillMaxWidth(0.95f),
+            shadowElevation = if (!theme.isDark) 12.dp else 0.dp
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                NavButton(
+                    "Qibla",
+                    Screen.Home,
+                    currentScreen == Screen.Home,
+                    theme
+                ) { onScreenSelected(Screen.Home) }
+                NavButton(
+                    "Settings",
+                    Screen.Settings,
+                    currentScreen == Screen.Settings,
+                    theme
+                ) { onScreenSelected(Screen.Settings) }
+            }
+        }
+    }
+}
+
+@Composable
+fun NavButton(
+    label: String,
+    screen: Screen,
+    isSelected: Boolean,
+    theme: CompassTheme,
+    onClick: () -> Unit,
+) {
+    val alpha by animateFloatAsState(if (isSelected) 1f else 0.4f, label = "")
+
+    Column(
+        modifier = Modifier
+            .padding(8.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .background(
+                    if (isSelected) theme.needleAlignedColor.copy(0.1f) else Color.Transparent,
+                    RoundedCornerShape(8.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) { }
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = label,
+            color = if (isSelected) theme.needleAlignedColor else theme.textColor.copy(alpha = alpha),
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+
+}
+
+@Composable
+fun QiblaCompassUI(
+    theme: CompassTheme,
+    qiblaDirection: Double?,
+    northDirection: Float,
+    distance: Double?,
+    sensorAccuracy: Int,
+    magneticStrength: Float,
+    location: Pair<Double, Double>?,
+    isDeviceFlat: Boolean,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as? MainActivity
+    val sunAngle = activity?.sunAzimuthState?.value?.toFloat()
+    val moonAngle = activity?.moonAzimuthState?.value?.toFloat()
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val isDaytime = hour in 6..18
+    val themePrefs = remember { ThemePreferences(context) }
+
+    // --- ADD THESE THREE LINES TO FIX THE ERRORS ---
+    var hasVibrated by remember { mutableStateOf(false) }
+    val vibStrength = themePrefs.getVibStrength() // Loads from SharedPreferences
+    val vibSpeed = themePrefs.getVibSpeed()       // Loads from SharedPreferences
+    // -----------------------------------------------
+
+    val qiblaAngle = qiblaDirection?.toFloat() ?: 0f
+    val angleDifference = shortestAngle(northDirection, qiblaAngle)
+    val isAligned = qiblaDirection != null && abs(angleDifference) < 3
+
+    LaunchedEffect(isAligned) {
+        if (isAligned && !hasVibrated && themePrefs.isVibrationEnabled()) {
+            // Use the base class 'Vibrator' to maintain compatibility across API levels
+            val vibrator: android.os.Vibrator =
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    val vibratorManager =
+                        context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
+                    vibratorManager.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+                }
+
+            if (vibrator.hasVibrator()) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    val timings = longArrayOf(0, vibSpeed, vibSpeed, vibSpeed)
+                    val amplitudes = intArrayOf(0, vibStrength, 0, vibStrength)
+                    vibrator.vibrate(
+                        android.os.VibrationEffect.createWaveform(
+                            timings,
+                            amplitudes,
+                            -1
+                        )
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(vibSpeed * 2)
+                }
+            }
+            hasVibrated = true
+        } else if (!isAligned) {
+            hasVibrated = false
+        }
+    }
+
+    val currentAccentColor by animateColorAsState(
+        targetValue = if (isAligned) theme.needleAlignedColor else theme.needleDefaultColor,
+        animationSpec = tween(500), label = ""
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(theme.backgroundColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(400.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            currentAccentColor.copy(0.15f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
+        CalibrationMeter(
+            magneticStrength,
+            sensorAccuracy,
+            theme,
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(20.dp)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 40.dp, bottom = 100.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = if (location == null) "SEARCHING GPS..." else "GPS ACTIVE",
+                color = if (location == null) Color.Yellow.copy(0.8f) else theme.textColor.copy(0.4f),
+                fontSize = 10.sp,
+                letterSpacing = 2.sp
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            Box(modifier = Modifier.size(320.dp), contentAlignment = Alignment.Center) {
+                CompassFace(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .rotate(-northDirection),
+                    qiblaAngle = qiblaAngle,
+                    sunAngle = sunAngle,
+                    moonAngle = moonAngle,
+                    theme = theme
+                )
+                FixedTopNeedle(currentAccentColor, theme)
+            }
+
+            Spacer(Modifier.height(30.dp))
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (isAligned) "ALIGNED WITH KAABA" else "ROTATE TO ALIGN",
+                    color = if (isAligned) theme.needleAlignedColor else theme.textColor.copy(0.6f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+
+                if (qiblaDirection != null) {
+                    Text(
+                        "${abs(angleDifference).toInt()}°",
+                        color = if (isAligned) theme.needleAlignedColor else theme.textColor,
+                        fontSize = 64.sp,
+                        fontWeight = FontWeight.ExtraLight
+                    )
+                }
+
+                if (distance != null) {
+                    Surface(
+                        color = theme.textColor.copy(0.05f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            "${distance.toInt()} KM TO MECCA",
+                            color = theme.textColor.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (sensorAccuracy <= SensorManager.SENSOR_STATUS_ACCURACY_LOW) CalibrationPrompt(theme)
+        else if (!isDeviceFlat) DeviceNotFlatPrompt(theme)
+    }
+
+}
+
+@Composable
+fun CalibrationMeter(strength: Float, accuracy: Int, theme: CompassTheme, modifier: Modifier) {
+    val isInterfered = strength > 150f || strength < 15f
+    val statusColor = when {
+        accuracy == SensorManager.SENSOR_STATUS_ACCURACY_HIGH && !isInterfered -> Color(0xFF00FF88)
+        accuracy == SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM -> Color.Yellow
+        else -> Color.Red
+    }
+
+    Column(modifier = modifier, horizontalAlignment = Alignment.End) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "COMPASS ACCURACY",
+                color = theme.textColor.copy(0.4f),
+                fontSize = 9.sp,
+                letterSpacing = 1.sp
+            )
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .background(statusColor, RoundedCornerShape(50))
+            )
+        }
+        if (isInterfered) {
+            Text(
+                "METAL INTERFERENCE",
+                color = Color.Red,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
 @Composable
 fun CompassFace(
     modifier: Modifier = Modifier,
-    qiblaAngle: Float? // <-- Add qiblaAngle as a parameter
+    qiblaAngle: Float,
+    sunAngle: Float?,
+    moonAngle: Float?,
+    theme: CompassTheme,
 ) {
-    // Load the kaaba image as a bitmap, which is efficient for canvas drawing
     val kaabaBitmap = ImageBitmap.imageResource(id = R.drawable.kaaba)
-
-    val textPaint = remember {
+    val textPaint = remember(theme) {
         Paint().apply {
             isAntiAlias = true
-            textSize = 40f
-            color = android.graphics.Color.WHITE
+            textSize = 42f
             textAlign = Paint.Align.CENTER
+            color = theme.textColor.toArgb() // DYNAMIC TEXT COLOR
         }
     }
 
     Canvas(modifier = modifier) {
         val radius = size.minDimension / 2.2f
         val center = this.center
-
-        // Draw the outer circle
+        drawCircle(theme.surfaceColor, radius = radius)
         drawCircle(
-            color = Color.White.copy(alpha = 0.5f),
+            theme.textColor.copy(0.1f),
             radius = radius,
-            center = center,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+            style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())
         )
 
-        // Draw tick marks and labels
-        for (angle in 0 until 360 step 15) {
-            // ... (the existing code for drawing ticks and labels remains the same)
+        for (angle in 0 until 360 step 2) {
+            val isMajor = angle % 30 == 0
             val isCardinal = angle % 90 == 0
-            val isMajor = angle % 45 == 0
-
-            val lineLength = when {
-                isCardinal -> 20.dp.toPx()
-                isMajor -> 15.dp.toPx()
-                else -> 10.dp.toPx()
-            }
-            val strokeWidth = when {
-                isCardinal -> 3.dp.toPx()
-                isMajor -> 2.dp.toPx()
-                else -> 1.dp.toPx()
-            }
-
-            rotate(degrees = angle.toFloat(), pivot = center) {
-                // Draw the tick line
+            rotate(angle.toFloat()) {
                 drawLine(
-                    color = Color.White,
+                    color = theme.textColor.copy(alpha = if (isMajor) 0.6f else 0.15f),
                     start = Offset(center.x, center.y - radius),
-                    end = Offset(center.x, center.y - radius + lineLength),
-                    strokeWidth = strokeWidth
+                    end = Offset(
+                        center.x,
+                        center.y - radius + (if (isCardinal) 20.dp.toPx() else 8.dp.toPx())
+                    ),
+                    strokeWidth = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
                 )
-
-                // Draw labels for cardinal points (N, E, S, W)
                 if (isCardinal) {
                     val label = when (angle) {
-                        0 -> "N"
-                        90 -> "E"
-                        180 -> "S"
-                        270 -> "W"
-                        else -> ""
+                        0 -> "N"; 90 -> "E"; 180 -> "S"; 270 -> "W"; else -> ""
                     }
+                    // North stays Red, others follow theme text color
+                    textPaint.color =
+                        if (angle == 0) android.graphics.Color.RED else theme.textColor.toArgb()
                     drawContext.canvas.nativeCanvas.drawText(
                         label,
                         center.x,
-                        center.y - radius + lineLength + 40f,
+                        center.y - radius + 70f,
                         textPaint
                     )
                 }
             }
         }
 
-        // --- NEW CODE TO DRAW THE KAABA ICON ---
-        if (qiblaAngle != null) {
-            // We rotate the entire canvas to the Qibla direction
-            rotate(degrees = qiblaAngle, pivot = center) {
-                val iconSizePx = 25.dp.toPx() // The size of our icon in pixels
-                val iconRadius = radius - 35.dp.toPx() // How far from the center to draw it
-
-                // Calculate the top-left position to center the icon correctly
-                val topLeft = Offset(
-                    x = center.x - iconSizePx / 2,
-                    y = center.y - iconRadius - iconSizePx / 2
-                )
-
-                // Draw the Kaaba bitmap onto the canvas
-                drawImage(
-                    image = kaabaBitmap,
-                    dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
-                    dstSize = IntSize(iconSizePx.roundToInt(), iconSizePx.roundToInt())
+        sunAngle?.let { angle ->
+            rotate(angle) {
+                // Draw a yellow "Sun" circle or icon at the edge of the compass
+                drawCircle(
+                    color = Color(0xFFFFD700), // Gold/Yellow
+                    radius = 8.dp.toPx(),
+                    center = Offset(center.x, center.y - radius + 15.dp.toPx())
                 )
             }
         }
+
+        moonAngle?.let { angle ->
+            rotate(angle) {
+                // Outer glow for the moon
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.3f),
+                    radius = 10.dp.toPx(),
+                    center = Offset(center.x, center.y - radius + 15.dp.toPx())
+                )
+                // The Moon itself
+                drawCircle(
+                    color = Color(0xFFE0E0E0), // Silver/Moonlight
+                    radius = 6.dp.toPx(),
+                    center = Offset(center.x, center.y - radius + 15.dp.toPx())
+                )
+            }
+        }
+
+
+
+        rotate(qiblaAngle) {
+            val iconSize = 48.dp.toPx()
+            drawImage(
+                kaabaBitmap,
+                dstOffset = IntOffset(
+                    (center.x - iconSize / 2).toInt(),
+                    (center.y - radius - iconSize / 2).toInt()
+                ),
+                dstSize = IntSize(iconSize.toInt(), iconSize.toInt())
+            )
+        }
+    }
+
+
+}
+
+@Composable
+fun FixedTopNeedle(accentColor: Color, theme: CompassTheme) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val path = Path().apply {
+            moveTo(center.x, 15.dp.toPx())
+            lineTo(center.x - 12.dp.toPx(), 45.dp.toPx())
+            lineTo(center.x + 12.dp.toPx(), 45.dp.toPx())
+            close()
+        }
+        drawPath(path, color = accentColor)
+        drawCircle(theme.backgroundColor, radius = 6f, center = center) // Match center dot to bg
     }
 }
 
 @Composable
-fun DeviceNotFlatPrompt() {
+fun CalibrationPrompt(theme: CompassTheme) {
     Box(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f)),
-        contentAlignment = Alignment.Center
+            .background(theme.backgroundColor.copy(0.95f)), Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_screen_rotation), // You'll need to add this icon
-                contentDescription = "Phone orientation icon",
-                modifier = Modifier.size(80.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Please Lay Phone Flat",
-                color = Color.White,
-                fontSize = 22.sp,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "For an accurate compass reading, the phone should be held parallel to the ground.",
-                color = Color.LightGray,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text("Move Phone in ∞ Shape", color = theme.textColor)
     }
 }
 
 @Composable
-fun QiblaCompassUI(
-    qiblaDirection: Double?,
-    northDirection: Float,
-    sensorAccuracy: Int,
-    location: Pair<Double, Double>?,
-    isDeviceFlat: Boolean // <-- Add the new parameter here
-) {
-    val qiblaAngle = qiblaDirection?.toFloat() ?: 0f
-
-    val animatedNeedleRotation by animateFloatAsState(
-        targetValue = qiblaAngle - northDirection,
-        label = "CompassNeedleRotation",
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-    )
-
-    val isAligned = qiblaDirection != null && abs((qiblaAngle - northDirection + 360) % 360) < 5
-
-    val bgColor by animateColorAsState(
-        targetValue = if (isAligned) Color(0xFF0C4B0C) else Color(0xFF101820),
-        label = "BackgroundColor"
-    )
-
+fun DeviceNotFlatPrompt(theme: CompassTheme) {
     Box(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
-            .background(bgColor),
-        contentAlignment = Alignment.Center
+            .background(theme.backgroundColor.copy(0.95f)), Alignment.Center
     ) {
-        // The main container for the compass face and the needle
-        Box(
-            modifier = Modifier.size(300.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // The custom-drawn compass face that rotates to point North
-            CompassFace(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .rotate(-northDirection),
-                qiblaAngle = qiblaDirection?.toFloat() // <-- PASS THE ANGLE HERE
-            )
-
-            // The needle that points towards the Qibla
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                rotate(degrees = animatedNeedleRotation, pivot = center) {
-                    val path = Path().apply {
-                        moveTo(center.x, center.y - 120)
-                        lineTo(center.x - 20, center.y)
-                        lineTo(center.x + 20, center.y)
-                        close()
-                    }
-                    drawPath(
-                        path = path,
-                        color = if (isAligned) Color.Yellow else Color(0xFFFF5722)
-                    )
-                }
-                // Center circle on top of the needle
-                drawCircle(color = Color.White, radius = 15f, center = center)
-            }
-        }
-
-        // Overlay for status text
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            AccuracyAndLocationStatus(sensorAccuracy, location)
-
-            if (isAligned) {
-                Text(
-                    text = "You are facing the Qibla",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                )
-            } else {
-                Spacer(modifier = Modifier.height(0.dp))
-            }
-        }
-
-        // --- UPDATED LOGIC FOR PROMPTS ---
-        // The calibration prompt has higher priority.
-        if (sensorAccuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || sensorAccuracy == SensorManager.SENSOR_STATUS_ACCURACY_LOW) {
-            CalibrationPrompt(sensorAccuracy = sensorAccuracy)
-        } else if (!isDeviceFlat) {
-            // If calibration is OK, but the phone is not flat, show this prompt.
-            DeviceNotFlatPrompt()
-        }
+        Text("Hold Phone Level", color = theme.textColor)
     }
 }
 
-@Composable
-fun CalibrationPrompt(sensorAccuracy: Int) {
-    if (sensorAccuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || sensorAccuracy == SensorManager.SENSOR_STATUS_ACCURACY_LOW) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.85f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(24.dp)
-            ) {
-                // Replace the static image with our new animation!
-                Figure8Animation(modifier = Modifier.padding(bottom = 32.dp))
+class ThemePreferences(context: Context) {
+    private val sharedPrefs = context.getSharedPreferences("qibla_prefs", Context.MODE_PRIVATE)
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Compass Interference",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "For an accurate direction, please move your phone in a figure-8 motion to calibrate the compass. Avoid magnetic or metal objects.",
-                    color = Color.LightGray,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+    // --- THEME ---
+    fun saveTheme(themeName: String) {
+        sharedPrefs.edit().putString("selected_theme", themeName).apply()
     }
-}
 
-@Composable
-fun Figure8Animation(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "Figure8Transition")
-
-    // Animate the angle from 0 to 360 degrees over 4 seconds for the path
-    val angle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "AngleAnimation"
-    )
-
-    // Animate the rotation from -30 to 30 degrees and back for a tilting effect
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = -30f,
-        targetValue = 30f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "RotationAnimation"
-    )
-
-    // This phone-like shape will be the object we animate
-    Surface(
-        modifier = modifier
-            .size(width = 50.dp, height = 100.dp)
-            .offset {
-                // This is the magic: A parametric equation for a figure-8 (Lissajous curve)
-                // We convert the animated angle to radians for trigonometric functions
-                val angleRad = Math.toRadians(angle.toDouble())
-                val radius = 80f // The size of the figure-8 loop
-
-                // sin(angle) controls the X movement, sin(2 * angle) controls the Y
-                // This makes the Y-axis move twice as fast, creating the figure-8 shape
-                val offsetX = radius * sin(angleRad)
-                val offsetY = radius * sin(2 * angleRad) / 2 // Divide by 2 to make the loop wider
-
-                IntOffset(offsetX.roundToInt(), offsetY.roundToInt())
-            }
-            .rotate(rotation), // Apply the tilting rotation
-        shape = RoundedCornerShape(12.dp),
-        color = Color.DarkGray,
-        border = BorderStroke(2.dp, Color.LightGray)
-    ) {
-        // A simple representation of a screen
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(6.dp))
-        )
+    fun getSavedThemeName(): String? {
+        return sharedPrefs.getString("selected_theme", "Obsidian Dark")
     }
-}
 
-@Composable
-fun AccuracyAndLocationStatus(sensorAccuracy: Int, location: Pair<Double, Double>?) {
-    val locationText = if (location == null) "Acquiring location..." else ""
-    if (locationText.isNotEmpty()) {
-        Text(
-            text = locationText,
-            color = Color.Yellow,
-            fontSize = 16.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .padding(8.dp)
-        )
+    // --- VIBRATION MASTER TOGGLE ---
+    fun saveVibrationEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("vib_enabled", enabled).apply()
     }
+
+    fun isVibrationEnabled(): Boolean {
+        return sharedPrefs.getBoolean("vib_enabled", false)
+    }
+
+    // --- VIBRATION CUSTOMIZATION ---
+    fun saveVibrationSettings(strength: Int, speed: Long) {
+        sharedPrefs.edit()
+            .putInt("vib_strength", strength)
+            .putLong("vib_speed", speed)
+            .apply()
+    }
+
+    fun saveTimezone(tzId: String) {
+        sharedPrefs.edit().putString("selected_timezone", tzId).apply()
+    }
+
+    fun getSavedTimezone(): String {
+        return sharedPrefs.getString("selected_timezone", java.util.TimeZone.getDefault().id) ?: "GMT"
+    }
+
+    fun getVibStrength(): Int = sharedPrefs.getInt("vib_strength", 255)
+    fun getVibSpeed(): Long = sharedPrefs.getLong("vib_speed", 50L)
 }

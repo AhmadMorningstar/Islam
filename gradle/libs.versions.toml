@@ -2,6 +2,9 @@
 activityCompose = "1.9.2"
 activityComposeVersion = "1.11.0"
 agp = "8.12.3"
+appUpdate = "2.1.0"
+appUpdateKtx = "2.1.0"
+integrity = "1.6.0"
 kotlin = "2.2.21"
 coreKtx = "1.17.0"
 junit = "4.13.2"
@@ -26,7 +29,9 @@ androidx-compose-ui-ui-tooling = { module = "androidx.compose.ui:ui-tooling", ve
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
 androidx-ui-tooling-v175 = { module = "androidx.compose.ui:ui-tooling", version.ref = "uiTooling" }
+app-update = { module = "com.google.android.play:app-update", version.ref = "appUpdate" }
 gms-play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocationVersion" }
+integrity = { module = "com.google.android.play:integrity", version.ref = "integrity" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -34,6 +39,7 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 material3 = { module = "androidx.compose.material3:material3", version.ref = "material3Version" }
+play-app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "appUpdateKtx" }
 play-services-location-v2101 = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
 ui = { module = "androidx.compose.ui:ui", version.ref = "uiVersion" }
