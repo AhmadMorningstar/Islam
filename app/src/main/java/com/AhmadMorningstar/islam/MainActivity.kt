@@ -80,6 +80,7 @@ import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityTokenRequest
+import androidx.activity.enableEdgeToEdge
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
@@ -176,13 +177,13 @@ class MainActivity : ComponentActivity() {
         val appUpdateManager = AppUpdateManagerFactory.create(this)
         appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
             if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                && info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
             ) {
                 // Launch the "Force Update" screen
                 appUpdateManager.startUpdateFlowForResult(
                     info,
                     updateResultLauncher,
-                    AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                    AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build()
                 )
             }
         }
@@ -301,6 +302,7 @@ class MainActivity : ComponentActivity() {
 
         verifyAppAuthenticity()
         checkForUpdates()
+        enableEdgeToEdge()
 
         super.onCreate(savedInstanceState)
         themePrefs = ThemePreferences(this)
