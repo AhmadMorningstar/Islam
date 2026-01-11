@@ -80,7 +80,25 @@ import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityTokenRequest
+import com.AhmadMorningstar.islam.BuildConfig
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.*
+import androidx.core.view.WindowCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import android.net.Uri
+import android.content.Intent
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import android.provider.Settings
+import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.*
+import android.location.LocationManager
+import androidx.compose.material3.Button
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
@@ -95,24 +113,59 @@ data class CompassTheme(
     val needleDefaultColor: Color,
     val needleAlignedColor: Color,
     val textColor: Color,
+    val compassIconColor: Color,
+    val settingsIconColor: Color
 )
 
 object AppThemes {
     val Obsidian = CompassTheme(
-        "Obsidian Dark", true, Color(0xFF0A0E12), Color.White.copy(0.05f),
-        Color.White, Color.Red, Color(0xFFFF3D00), Color(0xFF00FF88), Color.White
+        "Obsidian Dark",
+        true,
+        Color(0xFF0A0E12),
+        Color.White.copy(0.05f),
+        Color.White, Color.Red,
+        Color(0xFFFF3D00),
+        Color(0xFF00FF88),
+        Color.White,
+        compassIconColor = Color(0xFF00FF88),
+        settingsIconColor = Color.White.copy(alpha = 0.7f)
     )
     val PureLight = CompassTheme(
-        "Pure Light", false, Color(0xFFF5F5F7), Color.Black.copy(0.05f),
-        Color.DarkGray, Color.Red, Color(0xFF2C3E50), Color(0xFF27AE60), Color(0xFF1C1C1E)
+        "Pure Light",
+        false,
+        Color(0xFFF5F5F7),
+        Color.Black.copy(0.05f),
+        Color.DarkGray, Color.Red,
+        Color(0xFF2C3E50),
+        Color(0xFF27AE60),
+        Color(0xFF1C1C1E),
+                compassIconColor = Color(0xFFFFA000),
+        settingsIconColor = Color(0xFF5D4037)
     )
     val EmeraldNight = CompassTheme(
-        "Emerald Night", true, Color(0xFF06120E), Color.White.copy(0.03f),
-        Color(0xFF81C784), Color.Red, Color(0xFF4DB6AC), Color(0xFF00E676), Color.White
+        "Emerald Night", true,
+        Color(0xFF06120E),
+        Color.White.copy(0.03f),
+        Color(0xFF81C784),
+        Color.Red,
+        Color(0xFF4DB6AC),
+        Color(0xFF00E676),
+        Color.White,
+                compassIconColor = Color(0xFFFFA000),
+        settingsIconColor = Color(0xFF5D4037)
     )
     val DesertGold = CompassTheme(
-        "Desert Gold", false, Color(0xFFFFF8E1), Color(0xFF795548).copy(0.1f),
-        Color(0xFF5D4037), Color.Red, Color(0xFF8D6E63), Color(0xFFFFA000), Color(0xFF3E2723)
+        "Desert Gold",
+        false,
+        Color(0xFFFFF8E1),
+        Color(0xFF795548).copy(0.1f),
+        Color(0xFF5D4037),
+        Color.Red, Color(0xFF8D6E63),
+        Color(0xFFFFA000),
+        Color(0xFF3E2723),
+        compassIconColor = Color(0xFFFFA000),
+        settingsIconColor = Color(0xFF5D4037)
+
     )
 
     val OceanDeep = CompassTheme(
@@ -124,7 +177,9 @@ object AppThemes {
         northColor = Color(0xFFFF5252),      // Bright coral north
         needleDefaultColor = Color(0xFF00B0FF), // Vivid blue needle
         needleAlignedColor = Color(0xFF00E5FF), // Cyan alignment
-        textColor = Color(0xFFE3F2FD)        // Soft blue-white text
+        textColor = Color(0xFFE3F2FD),        // Soft blue-white text
+                compassIconColor = Color(0xFF00FF88), // Greenish
+        settingsIconColor = Color.White.copy(alpha = 0.7f) // Soft white
     )
 
     val allThemes = listOf(Obsidian, PureLight, EmeraldNight, DesertGold, OceanDeep)
@@ -161,6 +216,7 @@ class MainActivity : ComponentActivity() {
     private val northDirectionState = mutableStateOf(0f)
     private val magneticStrengthState = mutableStateOf(0f)
 
+
     val sunAzimuthState = derivedStateOf {
         locationState.value?.let { loc -> calculateSunAzimuth(loc.latitude, loc.longitude) }
     }
@@ -179,7 +235,7 @@ class MainActivity : ComponentActivity() {
             if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
                 && info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
             ) {
-                // Launch the "Force Update" screen
+                // Launch flexible update
                 appUpdateManager.startUpdateFlowForResult(
                     info,
                     updateResultLauncher,
@@ -187,7 +243,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+            .addOnFailureListener {
+                // Offline or network error - just log or optionally show a toast
+                // Do NOT block app usage
+                println("Update check failed: ${it.localizedMessage}")
+            }
     }
+
 
     private fun calculateSunAzimuth(lat: Double, lon: Double): Double {
         // 1. Load the saved timezone
@@ -233,29 +295,82 @@ class MainActivity : ComponentActivity() {
         return (Math.toDegrees(kotlin.math.atan2(y, x)) + 360) % 360
     }
 
-    private fun verifyAppAuthenticity() {
-        val integrityManager = IntegrityManagerFactory.create(applicationContext)
+    private fun isGpsEnabled(): Boolean {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    }
 
-        // Nonce should be a random secure string (unique per session)
-        val nonce = "AhmadMorningstar_" + System.currentTimeMillis()
+    private fun requestGpsEnable() {
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000).build()
+        val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
+        val client: SettingsClient = LocationServices.getSettingsClient(this)
+        val task = client.checkLocationSettings(builder.build())
 
-        val integrityTokenRequest = IntegrityTokenRequest.builder()
-            .setNonce(nonce)
-            .build()
+        task.addOnFailureListener { exception ->
+            if (exception is ResolvableApiException) {
+                try {
+                    // This triggers the modern Google Play Services "Turn on GPS?" dialog
+                    exception.startResolutionForResult(this, 12345)
+                } catch (sendEx: Exception) {
+                    // Ignore
+                }
+            }
+        }
+    }
 
-        integrityManager.requestIntegrityToken(integrityTokenRequest)
-            .addOnSuccessListener { response ->
-                val token = response.token()
-                // Log this or send to your server.
-                // If the token is invalid, the user is likely using a pirated/modded version.
+    private fun checkAppSecurity() {
+        val prefs = getSharedPreferences("security_prefs", MODE_PRIVATE)
+        val lastCheck = prefs.getLong("last_integrity_check", 0L)
+        val currentTime = System.currentTimeMillis()
+
+        // Battery Saver: Only check once every 24 hours
+        // (86400000 milliseconds = 24 hours)
+        if (currentTime - lastCheck < 86400000 && !BuildConfig.DEBUG) {
+            return
+        }
+
+        FirebaseAppCheck.getInstance().getAppCheckToken(false)
+            .addOnSuccessListener {
+                // Update the timestamp on success
+                prefs.edit().putLong("last_integrity_check", currentTime).apply()
+                android.util.Log.d("Security", "Integrity Check Passed!")
             }
             .addOnFailureListener { e ->
-                // This happens if the device is rooted, no Play Services, or tampered.
-                // You can choose to show a "Security Alert" dialog here.
+
+                val errorMsg = e.message ?: ""
+                val isNetworkError = errorMsg.contains("network", ignoreCase = true) ||
+                        errorMsg.contains("connection", ignoreCase = true) ||
+                        errorMsg.contains("timeout", ignoreCase = true)
+
+                if (!BuildConfig.DEBUG && !isNetworkError) {
+                    showIntegrityWarning()
+                } else {
+                    android.util.Log.e("Security", "Debug failure: ${e.message}")
+                }
             }
     }
 
-    // Add this state variable in MainActivity along with the others
+    private fun showIntegrityWarning() {
+        runOnUiThread {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Security Warning")
+                .setMessage("Your device or app may be tampered. For Security Concerns Please only download from Play Store.")
+                .setCancelable(false)
+                .setPositiveButton("Continue") { dialog, _ -> dialog.dismiss() }
+                .setNegativeButton("Go to Play Store") { dialog, _ ->
+                    val appPackageName = packageName
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$appPackageName")))
+                    } catch (anfe: android.content.ActivityNotFoundException) {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")))
+                    }
+                    dialog.dismiss()
+                }
+                .show()
+        }
+    }
+
+
     val moonAzimuthState = derivedStateOf {
         locationState.value?.let { loc -> calculateMoonAzimuth(loc.latitude, loc.longitude) }
     }
@@ -293,14 +408,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    data class VibrationSettings(
-        val strength: Int = 255, // 1 to 255
-        val speed: Long = 100,    // Delay in milliseconds
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
 
-        verifyAppAuthenticity()
+        FirebaseApp.initializeApp(this)
+
+        val firebaseAppCheck = FirebaseAppCheck.getInstance()
+        if (BuildConfig.DEBUG) {
+            // Only works for YOU because you have the Debug Secret in Firebase Console
+            firebaseAppCheck.installAppCheckProviderFactory(
+                com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
+            )
+        } else {
+            // Works for real users via Play Store
+            firebaseAppCheck.installAppCheckProviderFactory(
+                com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        }
+
+        // 2. Run the check
+        checkAppSecurity()
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         checkForUpdates()
         enableEdgeToEdge()
 
@@ -313,56 +441,87 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         setContent {
+            // --- YOUR EXISTING STATES ---
             val screen by currentScreen
             val theme by currentThemeState
 
+            // --- THE NEW STATES WE ADDED ---
+            var gpsEnabled by remember { mutableStateOf(isGpsEnabled()) }
+            var permissionGranted by remember {
+                mutableStateOf(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            }
+
+            // --- THE LIFECYCLE OBSERVER (Keep this here) ---
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        gpsEnabled = isGpsEnabled()
+                        permissionGranted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
+            // --- THE CLEANED UP UI STRUCTURE ---
+            // We use ONE root Box to keep everything layered correctly
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(theme.backgroundColor)
             ) {
-                when (screen) {
-                    Screen.Home -> {
-                        QiblaCompassUI(
-                            theme = theme,
-                            qiblaDirection = qiblaDirectionState.value,
-                            northDirection = northDirectionState.value,
-                            distance = distanceToKaabaState.value,
-                            sensorAccuracy = sensorAccuracyState.value,
-                            magneticStrength = magneticStrengthState.value,
-                            location = locationState.value?.let { Pair(it.latitude, it.longitude) },
-                            isDeviceFlat = isDeviceFlatState.value
-                        )
-                    }
-
-                    Screen.Settings -> {
-                        SettingsUI(
-                            theme = theme,
-                            onThemeSelected = { newTheme ->
-                                currentThemeState.value = newTheme
-                                themePrefs.saveTheme(newTheme.name)
-                            }
-                        )
+                // LAYER 1: Your Main App Content
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(WindowInsets.systemBars.asPaddingValues())
+                ) {
+                    when (screen) {
+                        Screen.Home -> {
+                            QiblaCompassUI(
+                                theme = theme,
+                                qiblaDirection = qiblaDirectionState.value,
+                                northDirection = northDirectionState.value,
+                                distance = distanceToKaabaState.value,
+                                sensorAccuracy = sensorAccuracyState.value,
+                                magneticStrength = magneticStrengthState.value,
+                                location = locationState.value?.let { Pair(it.latitude, it.longitude) },
+                                isDeviceFlat = isDeviceFlatState.value
+                            )
+                        }
+                        Screen.Settings -> {
+                            SettingsUI(
+                                theme = theme,
+                                onThemeSelected = { newTheme ->
+                                    currentThemeState.value = newTheme
+                                    themePrefs.saveTheme(newTheme.name)
+                                }
+                            )
+                        }
                     }
                 }
 
+                // LAYER 2: Your Navigation (stays on top of the content)
                 ModernBottomNav(screen, { currentScreen.value = it }, theme)
-            }
 
-            DisposableEffect(Unit) {
-                val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-                val magSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-                sensorManager.registerListener(
-                    sensorEventListener,
-                    rotationSensor,
-                    SensorManager.SENSOR_DELAY_UI
-                )
-                sensorManager.registerListener(
-                    sensorEventListener,
-                    magSensor,
-                    SensorManager.SENSOR_DELAY_UI
-                )
-                onDispose { sensorManager.unregisterListener(sensorEventListener) }
+                // LAYER 3: The Overlay (Shows only if needed, covers EVERYTHING)
+                if (!permissionGranted || !gpsEnabled) {
+                    LocationRequiredOverlay(
+                        isGpsOff = !gpsEnabled,
+                        isPermissionDenied = !permissionGranted,
+                        onActionClick = {
+                            if (!permissionGranted) {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", packageName, null)
+                                }
+                                startActivity(intent)
+                            } else {
+                                requestGpsEnable()
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -444,11 +603,24 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onResume() {
-        super.onResume(); checkLocationAndStartUpdates()
+        super.onResume()
+        // 1. Restart Sensors
+        val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        val magSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        sensorManager.registerListener(sensorEventListener, rotationSensor, SensorManager.SENSOR_DELAY_UI)
+        sensorManager.registerListener(sensorEventListener, magSensor, SensorManager.SENSOR_DELAY_UI)
+
+        // 2. Restart Location
+        checkLocationAndStartUpdates()
     }
 
     override fun onPause() {
-        super.onPause(); fusedLocationClient.removeLocationUpdates(locationCallback)
+        super.onPause()
+        // 1. Stop Sensors immediately to save CPU/Battery
+        sensorManager.unregisterListener(sensorEventListener)
+
+        // 2. Stop Location
+        fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 }
 
@@ -495,12 +667,16 @@ fun ModernBottomNav(
                 NavButton(
                     "Qibla",
                     Screen.Home,
+                    iconRes = R.drawable.ic_compass,
+                    iconColor = theme.compassIconColor,
                     currentScreen == Screen.Home,
                     theme
                 ) { onScreenSelected(Screen.Home) }
                 NavButton(
                     "Settings",
                     Screen.Settings,
+                    iconRes = R.drawable.ic_settings,
+                    iconColor = theme.settingsIconColor,
                     currentScreen == Screen.Settings,
                     theme
                 ) { onScreenSelected(Screen.Settings) }
@@ -513,6 +689,8 @@ fun ModernBottomNav(
 fun NavButton(
     label: String,
     screen: Screen,
+    iconRes: Int,
+    iconColor: Color,
     isSelected: Boolean,
     theme: CompassTheme,
     onClick: () -> Unit,
@@ -537,7 +715,14 @@ fun NavButton(
                     RoundedCornerShape(8.dp)
                 ),
             contentAlignment = Alignment.Center
-        ) { }
+        ) {
+            androidx.compose.material3.Icon(
+                painter = androidx.compose.ui.res.painterResource(id = iconRes),
+                contentDescription = label,
+                modifier = Modifier.size(20.dp),
+                // Uses your custom theme color when selected, otherwise fades
+                tint = if (isSelected) iconColor else theme.textColor.copy(alpha = alpha))
+        }
 
         Spacer(Modifier.height(4.dp))
 
@@ -934,4 +1119,35 @@ class ThemePreferences(context: Context) {
 
     fun getVibStrength(): Int = sharedPrefs.getInt("vib_strength", 255)
     fun getVibSpeed(): Long = sharedPrefs.getLong("vib_speed", 50L)
+}
+
+@Composable
+fun LocationRequiredOverlay(
+    isGpsOff: Boolean,
+    isPermissionDenied: Boolean,
+    onActionClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f))
+            .padding(24.dp),
+        contentAlignment = androidx.compose.ui.Alignment.Center
+    ) {
+        Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+            Text(
+                text = if (isGpsOff) "GPS is Disabled" else "Location Permission Required",
+                style = androidx.compose.ui.text.TextStyle(color = androidx.compose.ui.graphics.Color.White, fontSize = 20.sp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (isGpsOff) "To find the Qibla, your phone's GPS must be on." else "The app needs permission to know where you are.",
+                style = androidx.compose.ui.text.TextStyle(color = androidx.compose.ui.graphics.Color.Gray),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onActionClick) {
+                Text(if (isGpsOff) "Enable GPS" else "Grant Permission")
+            }
+        }
+    }
 }

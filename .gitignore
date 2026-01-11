@@ -16,3 +16,4 @@
 local.properties
 /Backup
 /.kotlin
+app/google-services.json

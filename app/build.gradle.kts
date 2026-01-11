@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -25,15 +26,17 @@ android {
 
     buildTypes {
         release {
-            ndk {
-                debugSymbolLevel = "FULL" // generates native debug symbols
-            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
         }
+
+    }
+    buildFeatures {
+        buildConfig = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -48,6 +51,21 @@ android {
 }
 
 dependencies {
+// ONLY USED FOR DEBUG AHMAD YOU HAVE TO REMMOVE THIS OR COMMENT MAYBE WHEN RELEASE OK
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
+
+
+    // Import the Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+
+    // TODO: Add the dependencies for Firebase products you want to use
+    // When using the BoM, don't specify versions in Firebase dependencies
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+
+
+    // Add the dependencies for any other desired Firebase products
+    // https://firebase.google.com/docs/android/setup#available-libraries
 
     // Core Android KTX
     implementation(libs.androidx.core.ktx)
@@ -83,37 +101,3 @@ dependencies {
     // Play Integrity API for Authenticity Checks
     implementation(libs.integrity)
 }
-/*
-dependencies {
-
-    // Jetpack Compose core
-    implementation(libs.androidx.activity.compose.v192)
-    implementation(libs.ui)
-    implementation(libs.material3)
-    implementation(libs.ui.tooling.preview)
-    debugImplementation(libs.androidx.ui.tooling.v175)
-
-    // Lifecycle for recomposition
-    implementation(libs.androidx.lifecycle.runtime.compose)
-
-    // Location
-    implementation(libs.gms.play.services.location)
-    implementation(libs.maps.compose)
-    implementation(libs.play.services.maps)
-    implementation(libs.play.services.location.v2101)
-
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-
-    // Jetpack Compose
-    implementation(libs.activity.compose)
-    implementation(libs.ui)
-    implementation(libs.material3)
-    implementation(libs.ui.tooling.preview)
-    debugImplementation(libs.androidx.compose.ui.ui.tooling)
-}
-*/
