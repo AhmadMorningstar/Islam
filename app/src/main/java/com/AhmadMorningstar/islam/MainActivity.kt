@@ -102,6 +102,7 @@ import org.json.JSONObject
 import java.net.URL
 import java.util.*
 import kotlin.concurrent.thread
+import android.app.Activity
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
@@ -457,7 +458,12 @@ class MainActivity : ComponentActivity() {
         AppUpdateChecker.fetchConfig { config ->
             if (config == null) return@fetchConfig
 
-            val currentVersion = packageManager.getPackageInfo(packageName, 0).longVersionCode
+            val currentVersion = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                packageManager.getPackageInfo(packageName, 0).longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0).versionCode.toLong()
+            }
             val forceExpired = currentVersion < config.min_version && AppUpdateChecker.isForceExpired(config.force_after)
             val country = AppUpdateChecker.getCountryCode()
 
@@ -1231,7 +1237,7 @@ object AppUpdateChecker {
     fun fetchConfig(onResult: (UpdateConfig?) -> Unit) {
         thread {
             try {
-                val jsonStr = URL("https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/update_config.json")
+                val jsonStr = URL("https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/update_config.json")
                     .readText()
                 val obj = JSONObject(jsonStr)
                 val regions = mutableListOf<String>()
