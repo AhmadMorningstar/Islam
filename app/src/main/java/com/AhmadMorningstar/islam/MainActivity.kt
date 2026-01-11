@@ -98,6 +98,10 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+import org.json.JSONObject
+import java.net.URL
+import java.util.*
+import kotlin.concurrent.thread
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
@@ -450,6 +454,29 @@ class MainActivity : ComponentActivity() {
         // 2. Run the check
         checkAppSecurity()
 
+        AppUpdateChecker.fetchConfig { config ->
+            if (config == null) return@fetchConfig
+
+            val currentVersion = packageManager.getPackageInfo(packageName, 0).longVersionCode
+            val forceExpired = currentVersion < config.min_version && AppUpdateChecker.isForceExpired(config.force_after)
+            val country = AppUpdateChecker.getCountryCode()
+
+            runOnUiThread {
+                when {
+                    currentVersion < config.min_version && forceExpired -> {
+                        // Force update after grace period
+                        showForceUpdateDialog(this, config.message)
+                    }
+
+                    currentVersion < config.latest_version && config.regions_optional.contains(country) -> {
+                        // Optional update for users in certain countries
+                        showOptionalUpdateDialog(this, config.message)
+                    }
+                }
+            }
+        }
+
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         checkForUpdates()
         enableEdgeToEdge()
@@ -521,7 +548,7 @@ class MainActivity : ComponentActivity() {
 
                         Screen.Settings -> {
                             SettingsUI(
-                                
+
                                 theme = theme,
                                 onThemeSelected = { newTheme ->
                                     currentThemeState.value = newTheme
@@ -1189,4 +1216,83 @@ fun LocationRequiredOverlay(
             }
         }
     }
+}
+
+data class UpdateConfig(
+    val min_version: Long,
+    val latest_version: Long,
+    val force_after: String,
+    val message: String,
+    val regions_optional: List<String>
+)
+
+object AppUpdateChecker {
+
+    fun fetchConfig(onResult: (UpdateConfig?) -> Unit) {
+        thread {
+            try {
+                val jsonStr = URL("https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/update_config.json")
+                    .readText()
+                val obj = JSONObject(jsonStr)
+                val regions = mutableListOf<String>()
+                if (obj.has("regions_optional")) {
+                    val arr = obj.getJSONArray("regions_optional")
+                    for (i in 0 until arr.length()) regions.add(arr.getString(i))
+                }
+
+                val config = UpdateConfig(
+                    min_version = obj.getLong("min_version"),
+                    latest_version = obj.getLong("latest_version"),
+                    force_after = obj.getString("force_after"),
+                    message = obj.getString("message"),
+                    regions_optional = regions
+                )
+                onResult(config)
+            } catch (e: Exception) {
+                onResult(null)
+            }
+        }
+    }
+
+    fun isForceExpired(forceAfter: String): Boolean {
+        return try {
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a VV")
+            val deadline = java.time.ZonedDateTime.parse(forceAfter, formatter)
+            java.time.ZonedDateTime.now().isAfter(deadline.withZoneSameInstant(java.time.ZoneId.systemDefault()))
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun getCountryCode(): String {
+        return Locale.getDefault().country.uppercase(Locale.US)
+    }
+}
+
+fun showForceUpdateDialog(context: Context, message: String) {
+    androidx.appcompat.app.AlertDialog.Builder(context)
+        .setTitle("Update Required")
+        .setMessage(message)
+        .setCancelable(false)
+        .setPositiveButton("Update") { _, _ ->
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
+            )
+            if (context is Activity) context.finishAffinity()
+        }
+        .show()
+}
+
+fun showOptionalUpdateDialog(context: Context, message: String) {
+    androidx.appcompat.app.AlertDialog.Builder(context)
+        .setTitle("Update Available")
+        .setMessage(message)
+        .setCancelable(true)
+        .setPositiveButton("Update") { _, _ ->
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
+            )
+        }
+        .setNegativeButton("Later", null)
+        .show()
 }
