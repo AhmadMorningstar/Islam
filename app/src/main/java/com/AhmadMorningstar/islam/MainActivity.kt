@@ -939,7 +939,10 @@ fun QiblaCompassUI(
             theme,
             Modifier
                 .align(Alignment.TopEnd)
-                .padding(20.dp)
+                .padding(
+                    top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding() + 20.dp,
+                    end = 20.dp
+                )
         )
 
         Column(
