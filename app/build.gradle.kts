@@ -11,10 +11,10 @@ android {
 
     defaultConfig {
         applicationId = "com.AhmadMorningstar.islam"
-        minSdk = 26
+        minSdk = 23
         targetSdk = 36
-        versionCode = 7
-        versionName = "7.0"
+        versionCode = 8
+        versionName = "8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,11 +28,8 @@ fun SettingsUI(
 ) {
     val context = LocalContext.current
 
-    val signatureStatus = remember {
-        mutableStateOf(
-            if (SignatureVerifier.isSignatureValid(context)) "Verified ✅"
-            else "Bad ❌"
-        )
+    val isSignatureValid = remember {
+        SignatureVerifier.isSignatureValid(context)
     }
 
     val prefs = remember { ThemePreferences(context) }
@@ -78,7 +76,7 @@ fun SettingsUI(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search city (e.g. Mecca)", color = theme.textColor.copy(0.4f)) },
+                    placeholder = { Text("Search city (e.g. Asia/Baghdad)", color = theme.textColor.copy(0.4f)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
@@ -234,12 +232,26 @@ fun SettingsUI(
                         fontSize = 12.sp
                     )
                 }
-                Text(
-                    text = signatureStatus.value,
-                    color = if (signatureStatus.value.startsWith("Verified")) Color.Green else Color.Red,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            id = if (isSignatureValid) R.drawable.ic_verified else R.drawable.ic_malicious
+                        ),
+                        contentDescription = if (isSignatureValid) "Verified" else "Malicious",
+                        tint = if (isSignatureValid) theme.verifiedColor else theme.maliciousColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = if (isSignatureValid) "Verified" else "Malicious",
+                        color = if (isSignatureValid) theme.verifiedColor else theme.maliciousColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
             }
         }
 

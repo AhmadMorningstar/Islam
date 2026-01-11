@@ -2,6 +2,7 @@ package com.AhmadMorningstar.islam
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -93,16 +94,16 @@ import com.google.android.play.core.install.model.UpdateAvailability
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import org.json.JSONObject
+import java.net.URL
+import java.util.Locale
+import kotlin.concurrent.thread
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-import org.json.JSONObject
-import java.net.URL
-import java.util.*
-import kotlin.concurrent.thread
-import android.app.Activity
+import androidx.activity.SystemBarStyle
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
@@ -119,6 +120,8 @@ data class CompassTheme(
     val textColor: Color,
     val compassIconColor: Color,
     val settingsIconColor: Color,
+    val verifiedColor: Color,
+    val maliciousColor: Color,
 )
 
 object AppThemes {
@@ -132,7 +135,9 @@ object AppThemes {
         Color(0xFF00FF88),
         Color.White,
         compassIconColor = Color(0xFF00FF88),
-        settingsIconColor = Color.White.copy(alpha = 0.7f)
+        settingsIconColor = Color.White.copy(alpha = 0.7f),
+        verifiedColor = Color(0xFF00FF88),
+        maliciousColor = Color(0xFFFF3D00)
     )
     val PureLight = CompassTheme(
         "Pure Light",
@@ -144,7 +149,9 @@ object AppThemes {
         Color(0xFF27AE60),
         Color(0xFF1C1C1E),
         compassIconColor = Color(0xFFFFA000),
-        settingsIconColor = Color(0xFF5D4037)
+        settingsIconColor = Color(0xFF5D4037),
+        verifiedColor = Color(0xFF27AE60),
+        maliciousColor = Color(0xFFD32F2F)
     )
     val EmeraldNight = CompassTheme(
         "Emerald Night", true,
@@ -156,7 +163,9 @@ object AppThemes {
         Color(0xFF00E676),
         Color.White,
         compassIconColor = Color(0xFFFFA000),
-        settingsIconColor = Color(0xFF5D4037)
+        settingsIconColor = Color(0xFF5D4037),
+        verifiedColor = Color(0xFF00E676),
+        maliciousColor = Color(0xFFFF5252)
     )
     val DesertGold = CompassTheme(
         "Desert Gold",
@@ -168,7 +177,9 @@ object AppThemes {
         Color(0xFFFFA000),
         Color(0xFF3E2723),
         compassIconColor = Color(0xFFFFA000),
-        settingsIconColor = Color(0xFF5D4037)
+        settingsIconColor = Color(0xFF5D4037),
+        verifiedColor = Color(0xFF388E3C),
+        maliciousColor = Color(0xFFC62828)
 
     )
 
@@ -183,7 +194,9 @@ object AppThemes {
         needleAlignedColor = Color(0xFF00E5FF), // Cyan alignment
         textColor = Color(0xFFE3F2FD),        // Soft blue-white text
         compassIconColor = Color(0xFF00FF88), // Greenish
-        settingsIconColor = Color.White.copy(alpha = 0.7f) // Soft white
+        settingsIconColor = Color.White.copy(alpha = 0.7f), // Soft white
+        verifiedColor = Color(0xFF00E5FF),
+        maliciousColor = Color(0xFFFF5252)
     )
 
     val allThemes = listOf(Obsidian, PureLight, EmeraldNight, DesertGold, OceanDeep)
@@ -215,14 +228,11 @@ class MainActivity : ComponentActivity() {
     private val currentThemeState = mutableStateOf(AppThemes.Obsidian)
     private lateinit var sensorManager: SensorManager
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-
     private val kaabaLat = 21.422487
     private val kaabaLon = 39.826206
-
     private var smoothedNorth = 0f
     private val smoothingFactor = 0.15f
     private var lastDeclination = 0f
-
     private val isDeviceFlatState = mutableStateOf(true)
     private val locationState = mutableStateOf<Location?>(null)
     private val sensorAccuracyState = mutableStateOf(SensorManager.SENSOR_STATUS_UNRELIABLE)
@@ -464,7 +474,8 @@ class MainActivity : ComponentActivity() {
                 @Suppress("DEPRECATION")
                 packageManager.getPackageInfo(packageName, 0).versionCode.toLong()
             }
-            val forceExpired = currentVersion < config.min_version && AppUpdateChecker.isForceExpired(config.force_after)
+            val forceExpired =
+                currentVersion < config.min_version && AppUpdateChecker.isForceExpired(config.force_after)
             val country = AppUpdateChecker.getCountryCode()
 
             runOnUiThread {
@@ -474,7 +485,9 @@ class MainActivity : ComponentActivity() {
                         showForceUpdateDialog(this, config.message)
                     }
 
-                    currentVersion < config.latest_version && config.regions_optional.contains(country) -> {
+                    currentVersion < config.latest_version && config.regions_optional.contains(
+                        country
+                    ) -> {
                         // Optional update for users in certain countries
                         showOptionalUpdateDialog(this, config.message)
                     }
@@ -482,10 +495,33 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Edge-to-edge setup compatible with SDK 21-36+
+        when {
+            // Android 15+ (API 35+): Use modern edge-to-edge API
+            android.os.Build.VERSION.SDK_INT >= 35 -> {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(
+                        android.graphics.Color.TRANSPARENT,
+                        android.graphics.Color.TRANSPARENT
+                    ),
+                    navigationBarStyle = SystemBarStyle.auto(
+                        android.graphics.Color.TRANSPARENT,
+                        android.graphics.Color.TRANSPARENT
+                    )
+                )
+            }
+            // Android 5.0+ (API 21-34): Legacy method
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP -> {
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            }
+            // Below Android 5.0 (shouldn't happen with minSdk 21, but safe fallback)
+            else -> {
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+            }
+        }
         checkForUpdates()
-        enableEdgeToEdge()
 
         super.onCreate(savedInstanceState)
         themePrefs = ThemePreferences(this)
@@ -496,14 +532,17 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         setContent {
-            // --- YOUR EXISTING STATES ---
             val screen by currentScreen
             val theme by currentThemeState
 
-            // --- THE NEW STATES WE ADDED ---
             var gpsEnabled by remember { mutableStateOf(isGpsEnabled()) }
             var permissionGranted by remember {
-                mutableStateOf(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                mutableStateOf(
+                    ActivityCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED
+                )
             }
 
             // --- THE LIFECYCLE OBSERVER (Keep this here) ---
@@ -512,8 +551,10 @@ class MainActivity : ComponentActivity() {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_RESUME) {
                         gpsEnabled = isGpsEnabled()
-                        permissionGranted =
-                            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        permissionGranted = ActivityCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
@@ -529,9 +570,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 // LAYER 1: Your Main App Content
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(WindowInsets.systemBars.asPaddingValues())
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     when (screen) {
                         Screen.Home -> {
@@ -1229,7 +1268,7 @@ data class UpdateConfig(
     val latest_version: Long,
     val force_after: String,
     val message: String,
-    val regions_optional: List<String>
+    val regions_optional: List<String>,
 )
 
 object AppUpdateChecker {
@@ -1237,8 +1276,9 @@ object AppUpdateChecker {
     fun fetchConfig(onResult: (UpdateConfig?) -> Unit) {
         thread {
             try {
-                val jsonStr = URL("https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/update_config.json")
-                    .readText()
+                val jsonStr =
+                    URL("https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/update_config.json")
+                        .readText()
                 val obj = JSONObject(jsonStr)
                 val regions = mutableListOf<String>()
                 if (obj.has("regions_optional")) {
@@ -1262,9 +1302,19 @@ object AppUpdateChecker {
 
     fun isForceExpired(forceAfter: String): Boolean {
         return try {
-            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a VV")
-            val deadline = java.time.ZonedDateTime.parse(forceAfter, formatter)
-            java.time.ZonedDateTime.now().isAfter(deadline.withZoneSameInstant(java.time.ZoneId.systemDefault()))
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                // Use java.time for API 26+
+                val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a VV")
+                val deadline = java.time.ZonedDateTime.parse(forceAfter, formatter)
+                java.time.ZonedDateTime.now()
+                    .isAfter(deadline.withZoneSameInstant(java.time.ZoneId.systemDefault()))
+            } else {
+                // Use SimpleDateFormat for API 21-25
+                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd hh:mm a", Locale.US)
+                val deadline = sdf.parse(forceAfter.substringBeforeLast(" "))
+                val now = java.util.Date()
+                now.after(deadline)
+            }
         } catch (e: Exception) {
             false
         }
@@ -1296,7 +1346,6 @@ fun showForceUpdateDialog(context: Context, message: String) {
         }
         .show()
 }
-
 
 fun showOptionalUpdateDialog(context: Context, message: String) {
     androidx.appcompat.app.AlertDialog.Builder(context)
