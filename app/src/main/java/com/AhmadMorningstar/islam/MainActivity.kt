@@ -3,6 +3,7 @@ package com.AhmadMorningstar.islam
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.hardware.GeomagneticField
@@ -11,9 +12,13 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
+import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -28,13 +33,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,42 +72,32 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.AhmadMorningstar.islam.security.SignatureVerifier
+import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
+import com.google.android.gms.location.SettingsClient
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
+import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
-import com.google.android.play.core.appupdate.AppUpdateManagerFactory
-import com.google.android.play.core.appupdate.AppUpdateOptions
-import com.google.android.play.core.install.model.AppUpdateType
-import com.google.android.play.core.install.model.UpdateAvailability
-import com.google.android.play.core.integrity.IntegrityManagerFactory
-import com.google.android.play.core.integrity.IntegrityTokenRequest
-import com.AhmadMorningstar.islam.BuildConfig
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.*
-import androidx.core.view.WindowCompat
-import com.google.firebase.FirebaseApp
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
-import android.net.Uri
-import android.content.Intent
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import android.provider.Settings
-import androidx.compose.runtime.*
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.location.*
-import android.location.LocationManager
-import androidx.compose.material3.Button
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
@@ -114,7 +113,7 @@ data class CompassTheme(
     val needleAlignedColor: Color,
     val textColor: Color,
     val compassIconColor: Color,
-    val settingsIconColor: Color
+    val settingsIconColor: Color,
 )
 
 object AppThemes {
@@ -139,7 +138,7 @@ object AppThemes {
         Color(0xFF2C3E50),
         Color(0xFF27AE60),
         Color(0xFF1C1C1E),
-                compassIconColor = Color(0xFFFFA000),
+        compassIconColor = Color(0xFFFFA000),
         settingsIconColor = Color(0xFF5D4037)
     )
     val EmeraldNight = CompassTheme(
@@ -151,7 +150,7 @@ object AppThemes {
         Color(0xFF4DB6AC),
         Color(0xFF00E676),
         Color.White,
-                compassIconColor = Color(0xFFFFA000),
+        compassIconColor = Color(0xFFFFA000),
         settingsIconColor = Color(0xFF5D4037)
     )
     val DesertGold = CompassTheme(
@@ -178,11 +177,20 @@ object AppThemes {
         needleDefaultColor = Color(0xFF00B0FF), // Vivid blue needle
         needleAlignedColor = Color(0xFF00E5FF), // Cyan alignment
         textColor = Color(0xFFE3F2FD),        // Soft blue-white text
-                compassIconColor = Color(0xFF00FF88), // Greenish
+        compassIconColor = Color(0xFF00FF88), // Greenish
         settingsIconColor = Color.White.copy(alpha = 0.7f) // Soft white
     )
 
     val allThemes = listOf(Obsidian, PureLight, EmeraldNight, DesertGold, OceanDeep)
+}
+
+fun Context.findActivity(): MainActivity? {
+    var context = this
+    while (context is android.content.ContextWrapper) {
+        if (context is MainActivity) return context
+        context = context.baseContext
+    }
+    return null
 }
 
 enum class Screen { Home, Settings }
@@ -250,7 +258,6 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-
     private fun calculateSunAzimuth(lat: Double, lon: Double): Double {
         // 1. Load the saved timezone
         val tzId = themePrefs.getSavedTimezone()
@@ -263,15 +270,15 @@ class MainActivity : ComponentActivity() {
         val totalHours = hour + (minute / 60.0)
 
         // ... rest of your existing math ...
-        val decl = 23.45 * kotlin.math.sin(Math.toRadians(360.0 / 365.0 * (dayOfYear - 81)))
+        val decl = 23.45 * sin(Math.toRadians(360.0 / 365.0 * (dayOfYear - 81)))
         val latRad = Math.toRadians(lat)
         val declRad = Math.toRadians(decl)
         val hourAngle = Math.toRadians(15.0 * (totalHours - 12.0))
-        val y = -kotlin.math.sin(hourAngle)
-        val x = (kotlin.math.cos(latRad) * kotlin.math.tan(declRad)) -
-                (kotlin.math.sin(latRad) * kotlin.math.cos(hourAngle))
+        val y = -sin(hourAngle)
+        val x = (cos(latRad) * kotlin.math.tan(declRad)) -
+                (sin(latRad) * cos(hourAngle))
 
-        return (Math.toDegrees(kotlin.math.atan2(y, x)) + 360) % 360
+        return (Math.toDegrees(atan2(y, x)) + 360) % 360
     }
 
     private fun calculateMoonAzimuth(lat: Double, lon: Double): Double {
@@ -289,19 +296,20 @@ class MainActivity : ComponentActivity() {
         val hourAngle = Math.toRadians(15.0 * (totalHours - 12.0) - moonPhaseAngle)
 
         val latRad = Math.toRadians(lat)
-        val y = -kotlin.math.sin(hourAngle)
-        val x = (kotlin.math.cos(latRad) * 0.3) - (kotlin.math.sin(latRad) * kotlin.math.cos(hourAngle))
+        val y = -sin(hourAngle)
+        val x = (cos(latRad) * 0.3) - (sin(latRad) * cos(hourAngle))
 
-        return (Math.toDegrees(kotlin.math.atan2(y, x)) + 360) % 360
+        return (Math.toDegrees(atan2(y, x)) + 360) % 360
     }
 
     private fun isGpsEnabled(): Boolean {
-        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
     }
 
     private fun requestGpsEnable() {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000).build()
+        val locationRequest =
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000).build()
         val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
         val client: SettingsClient = LocationServices.getSettingsClient(this)
         val task = client.checkLocationSettings(builder.build())
@@ -311,6 +319,7 @@ class MainActivity : ComponentActivity() {
                 try {
                     // This triggers the modern Google Play Services "Turn on GPS?" dialog
                     exception.startResolutionForResult(this, 12345)
+
                 } catch (sendEx: Exception) {
                     // Ignore
                 }
@@ -325,7 +334,7 @@ class MainActivity : ComponentActivity() {
 
         // Battery Saver: Only check once every 24 hours
         // (86400000 milliseconds = 24 hours)
-        if (currentTime - lastCheck < 86400000 && !BuildConfig.DEBUG) {
+        if (currentTime - lastCheck < 86400000) {
             return
         }
 
@@ -342,10 +351,8 @@ class MainActivity : ComponentActivity() {
                         errorMsg.contains("connection", ignoreCase = true) ||
                         errorMsg.contains("timeout", ignoreCase = true)
 
-                if (!BuildConfig.DEBUG && !isNetworkError) {
+                if (!isNetworkError) {
                     showIntegrityWarning()
-                } else {
-                    android.util.Log.e("Security", "Debug failure: ${e.message}")
                 }
             }
     }
@@ -360,16 +367,25 @@ class MainActivity : ComponentActivity() {
                 .setNegativeButton("Go to Play Store") { dialog, _ ->
                     val appPackageName = packageName
                     try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$appPackageName")))
+                        startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("market://details?id=$appPackageName")
+                            )
+                        )
                     } catch (anfe: android.content.ActivityNotFoundException) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")))
+                        startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")
+                            )
+                        )
                     }
                     dialog.dismiss()
                 }
                 .show()
         }
     }
-
 
     val moonAzimuthState = derivedStateOf {
         locationState.value?.let { loc -> calculateMoonAzimuth(loc.latitude, loc.longitude) }
@@ -410,20 +426,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
+        val signatureStatus = mutableStateOf("Checking...")
+
+        signatureStatus.value = if (SignatureVerifier.isSignatureValid(this)) {
+            "Verified ✅"
+        } else {
+            "Not Verified ❌"
+        }
+
+        if (!SignatureVerifier.isSignatureValid(this)) {
+            finishAffinity()
+            Runtime.getRuntime().exit(0)
+        }
+
         FirebaseApp.initializeApp(this)
 
         val firebaseAppCheck = FirebaseAppCheck.getInstance()
-        if (BuildConfig.DEBUG) {
-            // Only works for YOU because you have the Debug Secret in Firebase Console
-            firebaseAppCheck.installAppCheckProviderFactory(
-                com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
-            )
-        } else {
-            // Works for real users via Play Store
-            firebaseAppCheck.installAppCheckProviderFactory(
-                com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        }
+        firebaseAppCheck.installAppCheckProviderFactory(
+            PlayIntegrityAppCheckProviderFactory.getInstance()
+        )
+
 
         // 2. Run the check
         checkAppSecurity()
@@ -457,7 +479,8 @@ class MainActivity : ComponentActivity() {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_RESUME) {
                         gpsEnabled = isGpsEnabled()
-                        permissionGranted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        permissionGranted =
+                            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
@@ -486,12 +509,19 @@ class MainActivity : ComponentActivity() {
                                 distance = distanceToKaabaState.value,
                                 sensorAccuracy = sensorAccuracyState.value,
                                 magneticStrength = magneticStrengthState.value,
-                                location = locationState.value?.let { Pair(it.latitude, it.longitude) },
+                                location = locationState.value?.let {
+                                    Pair(
+                                        it.latitude,
+                                        it.longitude
+                                    )
+                                },
                                 isDeviceFlat = isDeviceFlatState.value
                             )
                         }
+
                         Screen.Settings -> {
                             SettingsUI(
+                                
                                 theme = theme,
                                 onThemeSelected = { newTheme ->
                                     currentThemeState.value = newTheme
@@ -512,9 +542,10 @@ class MainActivity : ComponentActivity() {
                         isPermissionDenied = !permissionGranted,
                         onActionClick = {
                             if (!permissionGranted) {
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", packageName, null)
-                                }
+                                val intent =
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", packageName, null)
+                                    }
                                 startActivity(intent)
                             } else {
                                 requestGpsEnable()
@@ -525,9 +556,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-
-
 
     private fun calculateDistance(lat1: Double, lon1: Double): Double {
         val r = 6371.0
@@ -607,8 +635,16 @@ class MainActivity : ComponentActivity() {
         // 1. Restart Sensors
         val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         val magSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-        sensorManager.registerListener(sensorEventListener, rotationSensor, SensorManager.SENSOR_DELAY_UI)
-        sensorManager.registerListener(sensorEventListener, magSensor, SensorManager.SENSOR_DELAY_UI)
+        sensorManager.registerListener(
+            sensorEventListener,
+            rotationSensor,
+            SensorManager.SENSOR_DELAY_UI
+        )
+        sensorManager.registerListener(
+            sensorEventListener,
+            magSensor,
+            SensorManager.SENSOR_DELAY_UI
+        )
 
         // 2. Restart Location
         checkLocationAndStartUpdates()
@@ -721,7 +757,8 @@ fun NavButton(
                 contentDescription = label,
                 modifier = Modifier.size(20.dp),
                 // Uses your custom theme color when selected, otherwise fades
-                tint = if (isSelected) iconColor else theme.textColor.copy(alpha = alpha))
+                tint = if (isSelected) iconColor else theme.textColor.copy(alpha = alpha)
+            )
         }
 
         Spacer(Modifier.height(4.dp))
@@ -748,11 +785,11 @@ fun QiblaCompassUI(
     isDeviceFlat: Boolean,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val activity = context as? MainActivity
+    val activity = remember(context) { context.findActivity() }
     val sunAngle = activity?.sunAzimuthState?.value?.toFloat()
     val moonAngle = activity?.moonAzimuthState?.value?.toFloat()
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-    val isDaytime = hour in 6..18
+    hour in 6..18
     val themePrefs = remember { ThemePreferences(context) }
 
     // --- ADD THESE THREE LINES TO FIX THE ERRORS ---
@@ -1114,7 +1151,8 @@ class ThemePreferences(context: Context) {
     }
 
     fun getSavedTimezone(): String {
-        return sharedPrefs.getString("selected_timezone", java.util.TimeZone.getDefault().id) ?: "GMT"
+        return sharedPrefs.getString("selected_timezone", java.util.TimeZone.getDefault().id)
+            ?: "GMT"
     }
 
     fun getVibStrength(): Int = sharedPrefs.getInt("vib_strength", 255)
@@ -1125,23 +1163,24 @@ class ThemePreferences(context: Context) {
 fun LocationRequiredOverlay(
     isGpsOff: Boolean,
     isPermissionDenied: Boolean,
-    onActionClick: () -> Unit
+    onActionClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.92f))
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
             .padding(24.dp),
-        contentAlignment = androidx.compose.ui.Alignment.Center
+        contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = if (isGpsOff) "GPS is Disabled" else "Location Permission Required",
-                style = androidx.compose.ui.text.TextStyle(color = androidx.compose.ui.graphics.Color.White, fontSize = 20.sp)
+                style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 20.sp)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = if (isGpsOff) "To find the Qibla, your phone's GPS must be on." else "The app needs permission to know where you are.",
-                style = androidx.compose.ui.text.TextStyle(color = androidx.compose.ui.graphics.Color.Gray),
+                style = androidx.compose.ui.text.TextStyle(color = Color.Gray),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))

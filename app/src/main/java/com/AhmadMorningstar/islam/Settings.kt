@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.AhmadMorningstar.islam.security.SignatureVerifier
 import java.util.TimeZone
 
 @Composable
@@ -25,6 +26,14 @@ fun SettingsUI(
     onThemeSelected: (CompassTheme) -> Unit
 ) {
     val context = LocalContext.current
+
+    val signatureStatus = remember {
+        mutableStateOf(
+            if (SignatureVerifier.isSignatureValid(context)) "Verified ✅"
+            else "Bad ❌"
+        )
+    }
+
     val prefs = remember { ThemePreferences(context) }
 
     var isVibEnabled by remember { mutableStateOf(prefs.isVibrationEnabled()) }
@@ -199,6 +208,41 @@ fun SettingsUI(
             )
             Spacer(Modifier.height(12.dp))
         }
+
+        Spacer(Modifier.height(32.dp))
+
+        SettingSectionHeader("Security", theme)
+
+        SettingsCard(theme) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Check Signature",
+                        color = theme.textColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "Ensures the app is official",
+                        color = theme.textColor.copy(0.5f),
+                        fontSize = 12.sp
+                    )
+                }
+                Text(
+                    text = signatureStatus.value,
+                    color = if (signatureStatus.value.startsWith("Verified")) Color.Green else Color.Red,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
     }
 }
 

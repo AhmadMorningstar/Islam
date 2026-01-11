@@ -1,20 +1,54 @@
-# Data Deletion Policy – Islam app
+# \# Data Deletion Policy — Islam app
 
-**Developer:** Ahmad Morningstar  
-**App Name:** Islam
+# 
 
-## Data Collection
-This app only accesses your **device location** (GPS, Wi-Fi, and mobile network) to calculate the direction of the Qibla.  
-No data is collected, shared, or stored on any remote servers.
+# \*\*Developer:\*\* Ahmad Morningstar  
 
-## Data Deletion
-The Qibla Finder app **does not store any personal data**.  
-All data used (like your current location and compass direction) exists only temporarily in your device’s memory.  
+# \*\*App Name:\*\* Islam
 
-Once the app is **closed or uninstalled**, all related data is permanently deleted automatically.
+# 
 
-## Request Data Deletion
-Since no data is stored, there is nothing to delete.  
-However, if you have any questions or want to confirm, you can contact me via email:
+# \## Data Collection
 
-📧 **ahmadmorningstarr@gmail.com**
+# The app temporarily accesses:
+
+# \- \*\*Device location\*\* — to calculate Qibla direction.
+
+# \- \*\*Device sensors\*\* — to determine compass orientation.
+
+# 
+
+# No personal data is collected, stored, or transmitted to remote servers.
+
+# 
+
+# \## Advertising ID
+
+# The app does not use Advertising ID for advertising, analytics, marketing, or user profiling.
+
+# Advertising ID access may occur internally through Google Play services solely for app functionality or system-level operations.
+
+# 
+
+# \## Data Deletion
+
+# \- The app does not store personal or identifiable user data.
+
+# \- All data exists only temporarily in device memory.
+
+# \- Closing or uninstalling the app automatically removes all data.
+
+# 
+
+# \## Request Data Deletion
+
+# Since no user data is stored, there is nothing to delete.
+
+# If you have questions or want confirmation, you may contact:
+
+# 
+
+# 📧 \*\*ahmadmorningstarr@gmail.com\*\*
+
+
+

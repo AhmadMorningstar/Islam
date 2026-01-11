@@ -11,20 +11,16 @@ android {
 
     defaultConfig {
         applicationId = "com.AhmadMorningstar.islam"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "4.0"
+        versionCode = 6
+        versionName = "6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildFeatures {
-            compose = true
-        }
-
     }
 
     buildTypes {
+
         release {
             isMinifyEnabled = true
             proguardFiles(
@@ -33,9 +29,10 @@ android {
             )
 
         }
-
     }
+
     buildFeatures {
+        compose = true
         buildConfig = true
     }
     compileOptions {
@@ -51,10 +48,6 @@ android {
 }
 
 dependencies {
-// ONLY USED FOR DEBUG AHMAD YOU HAVE TO REMMOVE THIS OR COMMENT MAYBE WHEN RELEASE OK
-    debugImplementation("com.google.firebase:firebase-appcheck-debug")
-
-
     // Import the Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
 

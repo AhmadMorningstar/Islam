@@ -1,31 +1,43 @@
 # Privacy Policy — Islam app
 
-**Last updated:** 2026-01-10
+**Last updated:** 2026-01-11
 
-Thank you for using Islam app. Your privacy is important. This Privacy Policy explains what data the app accesses and how that data is used.
+Thank you for using Islam app. Your privacy is important to us. This Privacy Policy explains what data the app accesses, how it is used, and how it is protected.
 
 ## Information We Access
 
-**Location (precise)**  
-- Purpose: To calculate the direction and distance from your current position to the Kaaba (Qibla) and display it on the compass and map.  
-- Source: Fused Location Provider (GPS, Wi-Fi, mobile networks).  
-- Storage & Sharing: Location data is used locally on your device to compute the Qibla bearing. We **do not** transmit or store your location on any server. No third parties receive your location.
+### Location (Precise)
+- **Purpose:** To calculate the direction and distance from your current position to the Kaaba (Qibla) and display it on the compass and map.
+- **Source:** Fused Location Provider (GPS, Wi-Fi, mobile networks).
+- **Storage & Sharing:** Location data is used only on your device for real-time calculation.  
+  We **do not store, collect, or transmit** your location to any server.  
+  No third parties receive your location data.
 
-**Device sensors (accelerometer, gyroscope, magnetometer, rotation vector)**  
-- Purpose: To determine the phone's heading and orientation so the compass needle points to Qibla accurately.  
-- Storage & Sharing: Sensor data is processed locally and is **not sent** to our servers.
+### Device Sensors
+(Accelerometer, gyroscope, magnetometer, rotation vector)
+- **Purpose:** To determine the device’s orientation so the Qibla compass points accurately.
+- **Storage & Sharing:** Sensor data is processed locally and is **never sent** off the device.
 
-## Permissions
-- `ACCESS_FINE_LOCATION` — required to calculate the Qibla direction and distance.  
-- `ACCESS_COARSE_LOCATION` - optional, used for map features.
-- `INTERNET` — required for Google Play services such as app updates and integrity checks.
+### Advertising ID
+- **Purpose:** The app itself does **not** use the Advertising ID for ads, marketing, tracking, or analytics.
+- **Reason for Declaration:** Some Google Play services or system libraries included with the app may access the Advertising ID internally for **app functionality, integrity checks, or compatibility purposes**.
+- **Ads & Tracking:** The app does **not display ads**, does **not perform ad targeting**, and does **not track users**.
+
+## Permissions Used
+- `ACCESS_FINE_LOCATION` — required to calculate accurate Qibla direction and distance.
+- `ACCESS_COARSE_LOCATION` — optional, used for map-related features.
+- `INTERNET` — required for Google Play services (updates, integrity checks).
+- `com.google.android.gms.permission.AD_ID` — declared for compatibility with Google Play services; not used for advertising or tracking.
 
 ## Data Retention
-- The app does not store your location or sensor data beyond what is required for immediate calculation. Uninstalling the app deletes all local data.  
+- The app does not store personal data.
+- All accessed data (location and sensor data) is used temporarily and only in memory.
+- Uninstalling the app removes all local data automatically.
 
 ## Analytics and Crash Reporting
-- This app does **not** integrate third-party analytics or crash reporting.  
+- The app does **not** use third-party analytics, advertising SDKs, or crash reporting services.
 
 ## Contact
-If you have questions regarding this policy, contact:  
+If you have any questions regarding this Privacy Policy, contact:
+
 **Email:** ahmadmorningstarr@gmail.com
