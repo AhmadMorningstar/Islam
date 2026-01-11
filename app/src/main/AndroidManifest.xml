@@ -19,6 +19,13 @@
         android:theme="@style/Theme.Islam"
         android:usesCleartextTraffic="true" >
 
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_deactivated"
+            android:value="true" />
+
         <activity
         android:name="com.AhmadMorningstar.islam.MainActivity"
         android:exported="true"

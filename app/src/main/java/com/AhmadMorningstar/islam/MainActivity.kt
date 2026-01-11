@@ -1284,10 +1284,19 @@ fun showForceUpdateDialog(context: Context, message: String) {
             context.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
             )
-            if (context is Activity) context.finishAffinity()
+            if (context is Activity) context.finishAffinity() // closes all activities
+            Runtime.getRuntime().exit(0) // ensure process exits
+        }
+        .setOnDismissListener {
+            // Prevent dialog dismissal
+            if (context is Activity) {
+                context.finishAffinity()
+                Runtime.getRuntime().exit(0)
+            }
         }
         .show()
 }
+
 
 fun showOptionalUpdateDialog(context: Context, message: String) {
     androidx.appcompat.app.AlertDialog.Builder(context)
