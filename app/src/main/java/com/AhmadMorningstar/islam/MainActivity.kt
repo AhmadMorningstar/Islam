@@ -211,7 +211,7 @@ fun Context.findActivity(): MainActivity? {
     return null
 }
 
-enum class Screen { Home, Settings }
+enum class Screen { Home, Prayer, Settings }
 
 class MainActivity : ComponentActivity() {
 
@@ -224,7 +224,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private lateinit var themePrefs: ThemePreferences
-    private val currentScreen = mutableStateOf(Screen.Home)
+    private val currentScreen = mutableStateOf(Screen.Prayer)
     private val currentThemeState = mutableStateOf(AppThemes.Obsidian)
     private lateinit var sensorManager: SensorManager
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -573,6 +573,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 ) {
                     when (screen) {
+                        Screen.Prayer -> {
+                            PrayerTimesUI(
+                                theme = theme,
+                            )
+                        }
+
                         Screen.Home -> {
                             QiblaCompassUI(
                                 theme = theme,
@@ -781,6 +787,14 @@ fun ModernBottomNav(
                     theme
                 ) { onScreenSelected(Screen.Home) }
                 NavButton(
+                    "Prayers",
+                    Screen.Prayer,
+                    iconRes = R.drawable.ic_prayer_times,
+                    iconColor = theme.needleAlignedColor,
+                    isSelected = currentScreen == Screen.Prayer,
+                    theme = theme
+                ) { onScreenSelected(Screen.Prayer) }
+                NavButton(
                     "Settings",
                     Screen.Settings,
                     iconRes = R.drawable.ic_settings,
@@ -788,6 +802,7 @@ fun ModernBottomNav(
                     currentScreen == Screen.Settings,
                     theme
                 ) { onScreenSelected(Screen.Settings) }
+
             }
         }
     }
@@ -1229,6 +1244,48 @@ class ThemePreferences(context: Context) {
         return sharedPrefs.getString("selected_timezone", java.util.TimeZone.getDefault().id)
             ?: "GMT"
     }
+
+    fun isPrayerMuted(prayerName: String): Boolean {
+        return sharedPrefs.getBoolean("mute_$prayerName", false)
+    }
+
+    fun setPrayerMuted(prayerName: String, isMuted: Boolean) {
+        sharedPrefs.edit().putBoolean("mute_$prayerName", isMuted).apply()
+    }
+
+    fun saveLocation(lat: Double, lng: Double, cityName: String) {
+        sharedPrefs.edit()
+            .putFloat("lat", lat.toFloat())
+            .putFloat("lng", lng.toFloat())
+            .putString("city_name", cityName)
+            .apply()
+    }
+
+    fun getLat(): Double = sharedPrefs.getFloat("lat", 36.1912f).toDouble()
+    fun getLng(): Double = sharedPrefs.getFloat("lng", 44.0091f).toDouble()
+    fun getCityName(): String = sharedPrefs.getString("city_name", "Erbil") ?: "Erbil"
+
+    // --- PRAYER CALCULATION SETTINGS ---
+    fun saveCalculationMethod(method: String) {
+        sharedPrefs.edit().putString("calc_method", method).apply()
+    }
+    fun getCalculationMethod(): String = sharedPrefs.getString("calc_method", "EGYPTIAN") ?: "EGYPTIAN"
+
+    fun saveAsrMethod(method: String) {
+        sharedPrefs.edit().putString("asr_method", method).apply()
+    }
+    fun getAsrMethod(): String = sharedPrefs.getString("asr_method", "SHAFI") ?: "SHAFI"
+
+    fun saveHighLatMethod(method: String) {
+        sharedPrefs.edit().putString("high_lat_method", method).apply()
+    }
+    fun getHighLatMethod(): String = sharedPrefs.getString("high_lat_method", "TWILIGHT") ?: "TWILIGHT"
+
+    // --- REGION SETTINGS ---
+    fun isAutoRegionEnabled(): Boolean = sharedPrefs.getBoolean("auto_region", true)
+    fun setAutoRegion(enabled: Boolean) = sharedPrefs.edit().putBoolean("auto_region", enabled).apply()
+
+    fun getCountry(): String = sharedPrefs.getString("user_country", "IQ") ?: "IQ"
 
     fun getVibStrength(): Int = sharedPrefs.getInt("vib_strength", 255)
     fun getVibSpeed(): Long = sharedPrefs.getLong("vib_speed", 50L)
