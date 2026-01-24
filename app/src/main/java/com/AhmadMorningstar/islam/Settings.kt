@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -20,20 +21,43 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.AhmadMorningstar.islam.security.SignatureVerifier
 import java.util.TimeZone
-
 @Composable
 fun SettingsUI(
     theme: CompassTheme,
     onThemeSelected: (CompassTheme) -> Unit
 ) {
     val context = LocalContext.current
-
-    val isSignatureValid = remember {
-        SignatureVerifier.isSignatureValid(context)
-    }
-
     val prefs = remember { ThemePreferences(context) }
 
+    // State to track navigation between "MAIN" and "REGION"
+    var currentSubPage by remember { mutableStateOf("MAIN") }
+
+    if (currentSubPage == "REGION") {
+        RegionSettingsUI(
+            theme = theme,
+            prefs = prefs,
+            onBack = { currentSubPage = "MAIN" }
+        )
+    } else {
+        SettingsMainContent(
+            theme = theme,
+            prefs = prefs,
+            onThemeSelected = onThemeSelected,
+            onOpenRegion = { currentSubPage = "REGION" }
+        )
+    }
+}
+
+@Composable
+fun SettingsMainContent(
+    theme: CompassTheme,
+    prefs: ThemePreferences,
+    onThemeSelected: (CompassTheme) -> Unit,
+    onOpenRegion: () -> Unit
+) {
+    val context = LocalContext.current
+
+    val isSignatureValid = remember { SignatureVerifier.isSignatureValid(context) }
     var isVibEnabled by remember { mutableStateOf(prefs.isVibrationEnabled()) }
     var currentStrength by remember { mutableStateOf(prefs.getVibStrength().toFloat()) }
     var currentSpeed by remember { mutableStateOf(prefs.getVibSpeed().toFloat()) }
@@ -44,7 +68,7 @@ fun SettingsUI(
 
     val allTzIds = remember { TimeZone.getAvailableIDs().toList() }
     val filteredTz = remember(searchQuery) {
-        if (searchQuery.isEmpty()) emptyList() // Don't show anything if not searching
+        if (searchQuery.isEmpty()) emptyList()
         else allTzIds.filter { it.contains(searchQuery, ignoreCase = true) }.take(5)
     }
 
@@ -65,6 +89,23 @@ fun SettingsUI(
         )
 
         // --- TIMEZONE SECTION (FIXED & NON-LAGGY) ---
+        SettingSectionHeader("Localization", theme)
+        SettingsCard(theme) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenRegion() }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Region & Calculation", color = theme.textColor, fontWeight = FontWeight.Bold)
+                    Text("Methods, Cities, and Adjustments", color = theme.textColor.copy(0.5f), fontSize = 12.sp)
+                }
+                Icon(painterResource(id = R.drawable.ic_verified), contentDescription = null, tint = theme.needleAlignedColor)
+            }
+        }
         SettingSectionHeader("Synchronization", theme)
         SettingsCard(theme) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -258,6 +299,233 @@ fun SettingsUI(
     }
 }
 
+val worldData = mapOf(
+    "United Kingdom" to listOf("London", "Manchester", "Birmingham", "Glasgow"),
+    "USA" to listOf("New York", "Los Angeles", "Chicago", "Houston", "Washington DC"),
+    "Saudi Arabia" to listOf("Makkah", "Medina", "Riyadh", "Jeddah"),
+    "Turkey" to listOf("Istanbul", "Ankara", "Izmir", "Bursa"),
+    "UAE" to listOf("Dubai", "Abu Dhabi", "Sharjah")
+)
+
+
+@Composable
+fun RegionSettingsUI(
+    theme: CompassTheme,
+    onBack: () -> Unit,
+    prefs: ThemePreferences
+) {
+    // Local state for UI responsiveness
+    var autoRegion by remember { mutableStateOf(prefs.isAutoRegionEnabled()) }
+    var calcMethod by remember { mutableStateOf(prefs.getCalculationMethod()) }
+    var asrMethod by remember { mutableStateOf(prefs.getAsrMethod()) }
+    var highLat by remember { mutableStateOf(prefs.getHighLatMethod()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(theme.backgroundColor)
+            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Spacer(modifier = Modifier.height(40.dp))
+
+        // Back Button & Title
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    painterResource(id = R.drawable.ic_malicious), // Reusing your icon as requested
+                    contentDescription = "Back",
+                    tint = theme.textColor
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Region & Calculation", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = theme.textColor)
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // 1. Automatic Toggle
+        SettingsCard(theme) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Automatic Selection", color = theme.textColor, fontWeight = FontWeight.Bold)
+                    Text("Use GPS and Internet for location", color = theme.textColor.copy(0.5f), fontSize = 12.sp)
+                }
+                Switch(
+                    checked = autoRegion,
+                    onCheckedChange = {
+                        autoRegion = it
+                        prefs.setAutoRegion(it)
+                    },
+                    colors = SwitchDefaults.colors(checkedThumbColor = theme.needleAlignedColor)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Manual Sections - Disabled if Auto is ON
+        val manualAlpha = if (autoRegion) 0.4f else 1f
+
+        Box(modifier = Modifier.alpha(manualAlpha)) {
+            Column {
+                SettingSectionHeader("Manual Selection", theme)
+
+                ExpandableSelectionCard(
+                    title = "Iraq Regions",
+                    selectedItem = prefs.getCityName(),
+                    options = listOf("Erbil", "Sulaymaniyah", "Kirkuk", "Baghdad", "Basra"),
+                    theme = theme,
+                    enabled = !autoRegion,
+                    onItemSelected = { city ->
+                        val coords = when(city) {
+                            "Sulaymaniyah" -> Pair(35.56, 45.42)
+                            "Kirkuk" -> Pair(35.46, 44.39)
+                            "Baghdad" -> Pair(33.31, 44.36)
+                            "Basra" -> Pair(30.50, 47.78)
+                            else -> Pair(36.19, 44.01) // Erbil default
+                        }
+                        prefs.saveLocation(coords.first, coords.second, city)
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ExpandableSelectionCard(
+                    title = "World Regions",
+                    selectedItem = "Search Country...",
+                    options = listOf("United Kingdom", "USA", "Saudi Arabia", "Turkey", "UAE", "Malaysia"),
+                    theme = theme,
+                    enabled = !autoRegion,
+                    onItemSelected = { /* Implement Country Picker Logic */ }
+                )
+            }
+            // Transparent overlay to prevent clicks when auto is on
+            if (autoRegion) {
+                Box(modifier = Modifier.matchParentSize().clickable(enabled = false) {})
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 2. Calculation Settings (Always accessible)
+        SettingSectionHeader("Calculation Standards", theme)
+
+        ExpandableSelectionCard(
+            title = "Calculation Method",
+            selectedItem = calcMethod,
+            options = listOf("MAKKAH", "MWL", "ISNA", "KARACHI", "EGYPTIAN", "JAFRI", "TEHRAN"),
+            theme = theme,
+            onItemSelected = {
+                calcMethod = it
+                prefs.saveCalculationMethod(it)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ExpandableSelectionCard(
+            title = "Asr Method",
+            selectedItem = asrMethod,
+            options = listOf("SHAFI", "HANAFI"),
+            theme = theme,
+            onItemSelected = {
+                asrMethod = it
+                prefs.saveAsrMethod(it)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ExpandableSelectionCard(
+            title = "Higher Latitude",
+            selectedItem = highLat,
+            options = listOf("NONE", "MID_NIGHT", "ONE_SEVEN", "TWILIGHT"),
+            theme = theme,
+            onItemSelected = {
+                highLat = it
+                prefs.saveHighLatMethod(it)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(120.dp)) // Extra scroll space
+    }
+}
+
+@Composable
+fun ExpandableSelectionCard(
+    title: String,
+    selectedItem: String,
+    options: List<String>,
+    theme: CompassTheme,
+    enabled: Boolean = true,
+    onItemSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Surface(
+        color = theme.textColor.copy(0.03f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, theme.textColor.copy(0.08f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = enabled) { expanded = !expanded }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(title, color = theme.textColor, fontSize = 14.sp)
+                    Text(selectedItem, color = theme.needleAlignedColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+                Icon(
+                    painter = painterResource(id = if (expanded) R.drawable.ic_verified else R.drawable.ic_prayer_times),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp).alpha(0.5f),
+                    tint = theme.textColor
+                )
+            }
+
+            if (expanded && enabled) {
+                HorizontalDivider(color = theme.textColor.copy(0.05f))
+                options.forEach { option ->
+                    Text(
+                        text = option,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onItemSelected(option)
+                                expanded = false
+                            }
+                            .padding(16.dp),
+                        color = if (option == selectedItem) theme.needleAlignedColor else theme.textColor,
+                        fontWeight = if (option == selectedItem) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectionRow(label: String, current: String, theme: CompassTheme) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = theme.textColor)
+        Text(current, color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
+    }
+}
+
 // Ensure these supporting composables remain in your file
 @Composable
 fun ThemeOptionRow(targetTheme: CompassTheme, isSelected: Boolean, currentTheme: CompassTheme, onClick: () -> Unit) {
@@ -290,10 +558,24 @@ fun SettingSectionHeader(title: String, theme: CompassTheme) {
 
 private fun testVibration(context: Context, strength: Int, speed: Long) {
     val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        vibratorManager.defaultVibrator
     } else {
-        @Suppress("DEPRECATION") context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
-    val effect = VibrationEffect.createWaveform(longArrayOf(0, speed, speed, speed), intArrayOf(0, strength, 0, strength), -1)
-    vibrator.vibrate(effect)
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        // API 26+ logic
+        val effect = VibrationEffect.createWaveform(
+            longArrayOf(0, speed, speed, speed),
+            intArrayOf(0, strength, 0, strength),
+            -1
+        )
+        vibrator.vibrate(effect)
+    } else {
+        // API 23-25 logic: Standard vibration pattern (strength cannot be controlled on older APIs)
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(longArrayOf(0, speed, speed, speed), -1)
+    }
 }

@@ -18,3 +18,4 @@ local.properties
 /.kotlin
 app/google-services.json
 app/src/main/java/com/AhmadMorningstar/islam/SignatureVerifier.kt
+/Google-PlayStore

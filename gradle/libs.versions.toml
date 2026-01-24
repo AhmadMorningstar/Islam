@@ -1,6 +1,7 @@
 [versions]
 activityCompose = "1.9.2"
 activityComposeVersion = "1.11.0"
+adhan = "1.2.1"
 agp = "8.12.3"
 appUpdate = "2.1.0"
 appUpdateKtx = "2.1.0"
@@ -24,6 +25,7 @@ uiVersion = "1.9.4"
 
 [libraries]
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityComposeVersion" }
+adhan = { module = "com.batoulapps.adhan:adhan", version.ref = "adhan" }
 androidx-activity-compose-v192 = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-compose-ui-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "uiToolingVersion" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

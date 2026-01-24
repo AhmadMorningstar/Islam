@@ -11,10 +11,10 @@ android {
 
     defaultConfig {
         applicationId = "com.AhmadMorningstar.islam"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "8.0"
+        versionCode = 9
+        versionName = "9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -85,6 +85,9 @@ dependencies {
     implementation(libs.gms.play.services.location) // This is likely the newer version (e.g., 21.3.0)
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
+
+    // Library for Athan prayer times
+    implementation(libs.adhan)
 
     // Testing
     testImplementation(libs.junit)
