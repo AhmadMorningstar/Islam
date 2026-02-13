@@ -223,6 +223,7 @@ class MainActivity : ComponentActivity() {
             checkForUpdates()
         }
     }
+    private val currentRegionState = mutableStateOf("erbil")
     private lateinit var themePrefs: ThemePreferences
     private val currentScreen = mutableStateOf(Screen.Prayer)
     private val currentThemeState = mutableStateOf(AppThemes.Obsidian)
@@ -525,6 +526,7 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         themePrefs = ThemePreferences(this)
+        currentRegionState.value = themePrefs.getSavedRegion()
         val savedName = themePrefs.getSavedThemeName()
         val themeToLoad = AppThemes.allThemes.find { it.name == savedName } ?: AppThemes.Obsidian
         currentThemeState.value = themeToLoad
@@ -573,37 +575,66 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 ) {
                     when (screen) {
+                        Screen.Home -> {
+                            // WRAPPER BOX: Holds Compass + Overlay
+                            Box(modifier = Modifier.fillMaxSize()) {
+
+                                // 1. The Compass UI (Always renders underneath)
+                                QiblaCompassUI(
+                                    theme = theme,
+                                    qiblaDirection = qiblaDirectionState.value,
+                                    northDirection = northDirectionState.value,
+                                    distance = distanceToKaabaState.value,
+                                    sensorAccuracy = sensorAccuracyState.value,
+                                    magneticStrength = magneticStrengthState.value,
+                                    location = locationState.value?.let {
+                                        Pair(
+                                            it.latitude,
+                                            it.longitude
+                                        )
+                                    },
+                                    isDeviceFlat = isDeviceFlatState.value
+                                )
+
+                                // 2. The GPS Overlay (Only shows HERE, on top of compass)
+                                if (!permissionGranted || !gpsEnabled) {
+                                    LocationRequiredOverlay(
+                                        isGpsOff = !gpsEnabled,
+                                        isPermissionDenied = !permissionGranted,
+                                        onActionClick = {
+                                            if (!permissionGranted) {
+                                                val intent =
+                                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                        data = Uri.fromParts("package", packageName, null)
+                                                    }
+                                                startActivity(intent)
+                                            } else {
+                                                requestGpsEnable()
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
                         Screen.Prayer -> {
                             PrayerTimesUI(
                                 theme = theme,
-                            )
-                        }
-
-                        Screen.Home -> {
-                            QiblaCompassUI(
-                                theme = theme,
-                                qiblaDirection = qiblaDirectionState.value,
-                                northDirection = northDirectionState.value,
-                                distance = distanceToKaabaState.value,
-                                sensorAccuracy = sensorAccuracyState.value,
-                                magneticStrength = magneticStrengthState.value,
-                                location = locationState.value?.let {
-                                    Pair(
-                                        it.latitude,
-                                        it.longitude
-                                    )
-                                },
-                                isDeviceFlat = isDeviceFlatState.value
+                                region = currentRegionState.value
                             )
                         }
 
                         Screen.Settings -> {
                             SettingsUI(
-
                                 theme = theme,
                                 onThemeSelected = { newTheme ->
                                     currentThemeState.value = newTheme
                                     themePrefs.saveTheme(newTheme.name)
+                                },
+                                currentRegion = currentRegionState.value,
+                                onRegionSelected = { newRegion ->
+                                    currentRegionState.value = newRegion
+                                    themePrefs.saveRegion(newRegion)
                                 }
                             )
                         }
@@ -612,25 +643,6 @@ class MainActivity : ComponentActivity() {
 
                 // LAYER 2: Your Navigation (stays on top of the content)
                 ModernBottomNav(screen, { currentScreen.value = it }, theme)
-
-                // LAYER 3: The Overlay (Shows only if needed, covers EVERYTHING)
-                if (!permissionGranted || !gpsEnabled) {
-                    LocationRequiredOverlay(
-                        isGpsOff = !gpsEnabled,
-                        isPermissionDenied = !permissionGranted,
-                        onActionClick = {
-                            if (!permissionGranted) {
-                                val intent =
-                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", packageName, null)
-                                    }
-                                startActivity(intent)
-                            } else {
-                                requestGpsEnable()
-                            }
-                        }
-                    )
-                }
             }
         }
     }
@@ -791,8 +803,8 @@ fun ModernBottomNav(
                     Screen.Prayer,
                     iconRes = R.drawable.ic_prayer_times,
                     iconColor = theme.needleAlignedColor,
-                    isSelected = currentScreen == Screen.Prayer,
-                    theme = theme
+                    currentScreen == Screen.Prayer,
+                    theme
                 ) { onScreenSelected(Screen.Prayer) }
                 NavButton(
                     "Settings",
@@ -802,7 +814,6 @@ fun ModernBottomNav(
                     currentScreen == Screen.Settings,
                     theme
                 ) { onScreenSelected(Screen.Settings) }
-
             }
         }
     }
@@ -1245,52 +1256,17 @@ class ThemePreferences(context: Context) {
             ?: "GMT"
     }
 
-    fun isPrayerMuted(prayerName: String): Boolean {
-        return sharedPrefs.getBoolean("mute_$prayerName", false)
-    }
-
-    fun setPrayerMuted(prayerName: String, isMuted: Boolean) {
-        sharedPrefs.edit().putBoolean("mute_$prayerName", isMuted).apply()
-    }
-
-    fun saveLocation(lat: Double, lng: Double, cityName: String) {
-        sharedPrefs.edit()
-            .putFloat("lat", lat.toFloat())
-            .putFloat("lng", lng.toFloat())
-            .putString("city_name", cityName)
-            .apply()
-    }
-
-    fun getLat(): Double = sharedPrefs.getFloat("lat", 36.1912f).toDouble()
-    fun getLng(): Double = sharedPrefs.getFloat("lng", 44.0091f).toDouble()
-    fun getCityName(): String = sharedPrefs.getString("city_name", "Erbil") ?: "Erbil"
-
-    // --- PRAYER CALCULATION SETTINGS ---
-    fun saveCalculationMethod(method: String) {
-        sharedPrefs.edit().putString("calc_method", method).apply()
-    }
-    fun getCalculationMethod(): String = sharedPrefs.getString("calc_method", "EGYPTIAN") ?: "EGYPTIAN"
-
-    fun saveAsrMethod(method: String) {
-        sharedPrefs.edit().putString("asr_method", method).apply()
-    }
-    fun getAsrMethod(): String = sharedPrefs.getString("asr_method", "SHAFI") ?: "SHAFI"
-
-    fun saveHighLatMethod(method: String) {
-        sharedPrefs.edit().putString("high_lat_method", method).apply()
-    }
-    fun getHighLatMethod(): String = sharedPrefs.getString("high_lat_method", "TWILIGHT") ?: "TWILIGHT"
-
-    // --- REGION SETTINGS ---
-    fun isAutoRegionEnabled(): Boolean = sharedPrefs.getBoolean("auto_region", true)
-    fun setAutoRegion(enabled: Boolean) = sharedPrefs.edit().putBoolean("auto_region", enabled).apply()
-
-    fun getCountry(): String = sharedPrefs.getString("user_country", "IQ") ?: "IQ"
-
     fun getVibStrength(): Int = sharedPrefs.getInt("vib_strength", 255)
     fun getVibSpeed(): Long = sharedPrefs.getLong("vib_speed", 50L)
-}
 
+    fun saveRegion(regionId: String) {
+        sharedPrefs.edit().putString("selected_region", regionId).apply()
+    }
+
+    fun getSavedRegion(): String {
+        return sharedPrefs.getString("selected_region", "erbil") ?: "erbil"
+    }
+}
 @Composable
 fun LocationRequiredOverlay(
     isGpsOff: Boolean,

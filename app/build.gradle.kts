@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.AhmadMorningstar.islam"
-        minSdk = 24
+        minSdk = 23
         targetSdk = 36
         versionCode = 9
         versionName = "9.0"

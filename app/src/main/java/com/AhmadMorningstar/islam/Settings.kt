@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -21,43 +20,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.AhmadMorningstar.islam.security.SignatureVerifier
 import java.util.TimeZone
+
 @Composable
 fun SettingsUI(
     theme: CompassTheme,
-    onThemeSelected: (CompassTheme) -> Unit
+    onThemeSelected: (CompassTheme) -> Unit,
+    currentRegion: String,
+    onRegionSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val regions = listOf(
+        "akre", "duhok", "erbil", "halabja", "jalawla", "khanaqin",
+        "kirkuk", "qara_hanjir", "shekhan", "sulaymaniyah", "taqtaq",
+        "tuz_khurma", "zakho"
+    )
+    var showRegionDialog by remember { mutableStateOf(false) }
+
+    val isSignatureValid = remember {
+        SignatureVerifier.isSignatureValid(context)
+    }
+
     val prefs = remember { ThemePreferences(context) }
 
-    // State to track navigation between "MAIN" and "REGION"
-    var currentSubPage by remember { mutableStateOf("MAIN") }
-
-    if (currentSubPage == "REGION") {
-        RegionSettingsUI(
-            theme = theme,
-            prefs = prefs,
-            onBack = { currentSubPage = "MAIN" }
-        )
-    } else {
-        SettingsMainContent(
-            theme = theme,
-            prefs = prefs,
-            onThemeSelected = onThemeSelected,
-            onOpenRegion = { currentSubPage = "REGION" }
-        )
-    }
-}
-
-@Composable
-fun SettingsMainContent(
-    theme: CompassTheme,
-    prefs: ThemePreferences,
-    onThemeSelected: (CompassTheme) -> Unit,
-    onOpenRegion: () -> Unit
-) {
-    val context = LocalContext.current
-
-    val isSignatureValid = remember { SignatureVerifier.isSignatureValid(context) }
     var isVibEnabled by remember { mutableStateOf(prefs.isVibrationEnabled()) }
     var currentStrength by remember { mutableStateOf(prefs.getVibStrength().toFloat()) }
     var currentSpeed by remember { mutableStateOf(prefs.getVibSpeed().toFloat()) }
@@ -68,7 +52,7 @@ fun SettingsMainContent(
 
     val allTzIds = remember { TimeZone.getAvailableIDs().toList() }
     val filteredTz = remember(searchQuery) {
-        if (searchQuery.isEmpty()) emptyList()
+        if (searchQuery.isEmpty()) emptyList() // Don't show anything if not searching
         else allTzIds.filter { it.contains(searchQuery, ignoreCase = true) }.take(5)
     }
 
@@ -89,23 +73,6 @@ fun SettingsMainContent(
         )
 
         // --- TIMEZONE SECTION (FIXED & NON-LAGGY) ---
-        SettingSectionHeader("Localization", theme)
-        SettingsCard(theme) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenRegion() }
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Region & Calculation", color = theme.textColor, fontWeight = FontWeight.Bold)
-                    Text("Methods, Cities, and Adjustments", color = theme.textColor.copy(0.5f), fontSize = 12.sp)
-                }
-                Icon(painterResource(id = R.drawable.ic_verified), contentDescription = null, tint = theme.needleAlignedColor)
-            }
-        }
         SettingSectionHeader("Synchronization", theme)
         SettingsCard(theme) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -161,6 +128,33 @@ fun SettingsMainContent(
         }
 
         Spacer(Modifier.height(32.dp))
+
+
+        // --- REGION SECTION ---
+        SettingSectionHeader("Location", theme)
+        SettingsCard(theme) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showRegionDialog = true }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Prayer Region", color = theme.textColor, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = currentRegion.replace("_", " ").uppercase(),
+                        color = theme.needleAlignedColor,
+                        fontSize = 12.sp
+                    )
+                }
+                Text("Change", color = theme.needleAlignedColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
 
         // --- HAPTIC FEEDBACK SECTION ---
         SettingSectionHeader("Haptic Feedback", theme)
@@ -295,234 +289,57 @@ fun SettingsMainContent(
                 }
             }
         }
-
     }
-}
-
-val worldData = mapOf(
-    "United Kingdom" to listOf("London", "Manchester", "Birmingham", "Glasgow"),
-    "USA" to listOf("New York", "Los Angeles", "Chicago", "Houston", "Washington DC"),
-    "Saudi Arabia" to listOf("Makkah", "Medina", "Riyadh", "Jeddah"),
-    "Turkey" to listOf("Istanbul", "Ankara", "Izmir", "Bursa"),
-    "UAE" to listOf("Dubai", "Abu Dhabi", "Sharjah")
-)
-
-
-@Composable
-fun RegionSettingsUI(
-    theme: CompassTheme,
-    onBack: () -> Unit,
-    prefs: ThemePreferences
-) {
-    // Local state for UI responsiveness
-    var autoRegion by remember { mutableStateOf(prefs.isAutoRegionEnabled()) }
-    var calcMethod by remember { mutableStateOf(prefs.getCalculationMethod()) }
-    var asrMethod by remember { mutableStateOf(prefs.getAsrMethod()) }
-    var highLat by remember { mutableStateOf(prefs.getHighLatMethod()) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(theme.backgroundColor)
-            .padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // Back Button & Title
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    painterResource(id = R.drawable.ic_malicious), // Reusing your icon as requested
-                    contentDescription = "Back",
-                    tint = theme.textColor
+    // Region Selection Dialog
+    // Region Selection Dialog inside SettingsUI
+    if (showRegionDialog) {
+        AlertDialog(
+            onDismissRequest = { showRegionDialog = false },
+            title = {
+                Text(
+                    "Select Region",
+                    color = theme.textColor,
+                    fontWeight = FontWeight.Bold
                 )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Region & Calculation", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = theme.textColor)
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // 1. Automatic Toggle
-        SettingsCard(theme) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Automatic Selection", color = theme.textColor, fontWeight = FontWeight.Bold)
-                    Text("Use GPS and Internet for location", color = theme.textColor.copy(0.5f), fontSize = 12.sp)
+            },
+            containerColor = theme.backgroundColor,
+            // The Fix: Provide a TextButton instead of an empty lambda {}
+            confirmButton = {
+                TextButton(onClick = { showRegionDialog = false }) {
+                    Text("CANCEL", color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
                 }
-                Switch(
-                    checked = autoRegion,
-                    onCheckedChange = {
-                        autoRegion = it
-                        prefs.setAutoRegion(it)
-                    },
-                    colors = SwitchDefaults.colors(checkedThumbColor = theme.needleAlignedColor)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Manual Sections - Disabled if Auto is ON
-        val manualAlpha = if (autoRegion) 0.4f else 1f
-
-        Box(modifier = Modifier.alpha(manualAlpha)) {
-            Column {
-                SettingSectionHeader("Manual Selection", theme)
-
-                ExpandableSelectionCard(
-                    title = "Iraq Regions",
-                    selectedItem = prefs.getCityName(),
-                    options = listOf("Erbil", "Sulaymaniyah", "Kirkuk", "Baghdad", "Basra"),
-                    theme = theme,
-                    enabled = !autoRegion,
-                    onItemSelected = { city ->
-                        val coords = when(city) {
-                            "Sulaymaniyah" -> Pair(35.56, 45.42)
-                            "Kirkuk" -> Pair(35.46, 44.39)
-                            "Baghdad" -> Pair(33.31, 44.36)
-                            "Basra" -> Pair(30.50, 47.78)
-                            else -> Pair(36.19, 44.01) // Erbil default
-                        }
-                        prefs.saveLocation(coords.first, coords.second, city)
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ExpandableSelectionCard(
-                    title = "World Regions",
-                    selectedItem = "Search Country...",
-                    options = listOf("United Kingdom", "USA", "Saudi Arabia", "Turkey", "UAE", "Malaysia"),
-                    theme = theme,
-                    enabled = !autoRegion,
-                    onItemSelected = { /* Implement Country Picker Logic */ }
-                )
-            }
-            // Transparent overlay to prevent clicks when auto is on
-            if (autoRegion) {
-                Box(modifier = Modifier.matchParentSize().clickable(enabled = false) {})
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 2. Calculation Settings (Always accessible)
-        SettingSectionHeader("Calculation Standards", theme)
-
-        ExpandableSelectionCard(
-            title = "Calculation Method",
-            selectedItem = calcMethod,
-            options = listOf("MAKKAH", "MWL", "ISNA", "KARACHI", "EGYPTIAN", "JAFRI", "TEHRAN"),
-            theme = theme,
-            onItemSelected = {
-                calcMethod = it
-                prefs.saveCalculationMethod(it)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        ExpandableSelectionCard(
-            title = "Asr Method",
-            selectedItem = asrMethod,
-            options = listOf("SHAFI", "HANAFI"),
-            theme = theme,
-            onItemSelected = {
-                asrMethod = it
-                prefs.saveAsrMethod(it)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        ExpandableSelectionCard(
-            title = "Higher Latitude",
-            selectedItem = highLat,
-            options = listOf("NONE", "MID_NIGHT", "ONE_SEVEN", "TWILIGHT"),
-            theme = theme,
-            onItemSelected = {
-                highLat = it
-                prefs.saveHighLatMethod(it)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(120.dp)) // Extra scroll space
-    }
-}
-
-@Composable
-fun ExpandableSelectionCard(
-    title: String,
-    selectedItem: String,
-    options: List<String>,
-    theme: CompassTheme,
-    enabled: Boolean = true,
-    onItemSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Surface(
-        color = theme.textColor.copy(0.03f),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, theme.textColor.copy(0.08f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = enabled) { expanded = !expanded }
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(title, color = theme.textColor, fontSize = 14.sp)
-                    Text(selectedItem, color = theme.needleAlignedColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-                Icon(
-                    painter = painterResource(id = if (expanded) R.drawable.ic_verified else R.drawable.ic_prayer_times),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp).alpha(0.5f),
-                    tint = theme.textColor
-                )
-            }
-
-            if (expanded && enabled) {
-                HorizontalDivider(color = theme.textColor.copy(0.05f))
-                options.forEach { option ->
-                    Text(
-                        text = option,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onItemSelected(option)
-                                expanded = false
+            },
+            text = {
+                // Box with fixed height prevents the dialog from jumping
+                // and manages the scroll area better
+                Box(modifier = Modifier.heightIn(max = 400.dp)) {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        regions.forEach { regionId ->
+                            val displayName = regionId.replace("_", " ").uppercase()
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onRegionSelected(regionId)
+                                        showRegionDialog = false
+                                    }
+                                    .padding(vertical = 2.dp),
+                                color = if (regionId == currentRegion) theme.needleAlignedColor.copy(0.1f) else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = displayName,
+                                    color = if (regionId == currentRegion) theme.needleAlignedColor else theme.textColor,
+                                    modifier = Modifier.padding(16.dp),
+                                    fontWeight = if (regionId == currentRegion) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp
+                                )
                             }
-                            .padding(16.dp),
-                        color = if (option == selectedItem) theme.needleAlignedColor else theme.textColor,
-                        fontWeight = if (option == selectedItem) FontWeight.Bold else FontWeight.Normal
-                    )
+                        }
+                    }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun SelectionRow(label: String, current: String, theme: CompassTheme) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, color = theme.textColor)
-        Text(current, color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
+        )
     }
 }
 
