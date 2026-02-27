@@ -254,9 +254,37 @@ fun FlashcardView(
     category: DuaCategory?,
     onSourceClick: () -> Unit
 ) {
-    val context = LocalContext.current
     var count by remember { mutableStateOf(0) }
     val isComplete = count >= dua.targetCount
+
+    val context = LocalContext.current
+    val mediaPlayer = remember { android.media.MediaPlayer() }
+    var isPlaying by remember { mutableStateOf(false) }
+    var duration by remember { mutableStateOf("0:00") }
+
+    val audioUrl = "https://github.com/AhmadMorningstar/Islam/raw/refs/heads/main/app/src/main/assets/Dua/content/audio/${category?.id}/${dua.audioUrl}"
+
+
+    LaunchedEffect(dua.id) {
+        try {
+            mediaPlayer.reset()
+            mediaPlayer.setDataSource(audioUrl)
+            mediaPlayer.prepareAsync()
+            mediaPlayer.setOnPreparedListener { mp ->
+                val seconds = mp.duration / 1000
+                duration = String.format("%d:%02d", seconds / 60, seconds % 60)
+            }
+            mediaPlayer.setOnCompletionListener { isPlaying = false }
+        } catch (e: Exception) { duration = "Error" }
+    }
+
+    // Clean up player when leaving screen
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer.release()
+        }
+    }
+
 
     Column(
         modifier = Modifier
@@ -293,22 +321,38 @@ fun FlashcardView(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Interactive Tap Counter
-        Surface(
-            modifier = Modifier
-                .size(80.dp)
-                .clickable(enabled = !isComplete) { count++ },
-            shape = CircleShape,
-            color = if (isComplete) theme.needleAlignedColor else theme.surfaceColor,
-            border = BorderStroke(2.dp, theme.needleAlignedColor)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = if (isComplete) "✓" else "$count / ${dua.targetCount}",
-                    color = if (isComplete) theme.backgroundColor else theme.textColor,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Play/Pause Button
+            Surface(
+                modifier = Modifier.size(50.dp).clickable {
+                    if (isPlaying) mediaPlayer.pause() else mediaPlayer.start()
+                    isPlaying = !isPlaying
+                },
+                shape = CircleShape,
+                color = theme.needleAlignedColor.copy(0.2f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(if (isPlaying) "⏸" else "▶", color = theme.needleAlignedColor, fontSize = 20.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Main Tap Counter
+            Surface(
+                modifier = Modifier.size(80.dp).clickable(enabled = !isComplete) { count++ },
+                shape = CircleShape,
+                color = if (isComplete) theme.needleAlignedColor else theme.surfaceColor,
+                border = BorderStroke(2.dp, theme.needleAlignedColor)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (isComplete) "✓" else "$count / ${dua.targetCount}",
+                        color = if (isComplete) theme.backgroundColor else theme.textColor,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -321,28 +365,17 @@ fun FlashcardView(
         if (dua.explanation.isNotEmpty()) ExpandableSection("Explanation", dua.explanation, theme)
 
         // Bottom Action Buttons (Source & Audio)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = onSourceClick,
-                colors = ButtonDefaults.buttonColors(containerColor = theme.textColor.copy(0.1f))
-            ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Button(onClick = onSourceClick, colors = ButtonDefaults.buttonColors(containerColor = theme.textColor.copy(0.1f))) {
                 Text("Verify Authenticity", color = theme.textColor)
             }
 
+            // Audio Button showing Duration
             Button(
-                onClick = {
-                    val catId = category?.id ?: ""
-                    if (dua.audioUrl.isNotEmpty()) {
-                        val fullAudioUrl = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/Dua/content/audio/$catId/${dua.audioUrl}"
-                        playAudio(context, fullAudioUrl)
-                    }
-                },
-                // ...
+                onClick = { /* Already handled by the Play button above */ },
+                colors = ButtonDefaults.buttonColors(containerColor = theme.needleAlignedColor.copy(0.1f))
             ) {
-                Text("▶ Audio", color = theme.needleAlignedColor)
+                Text("Audio ($duration)", color = theme.needleAlignedColor)
             }
         }
     }
@@ -405,15 +438,14 @@ fun loadCategories(context: Context, lang: String): List<DuaCategory> {
 }
 
 object DuaDownloader {
-    private const val BASE_URL = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/Dua"
+    // Updated to your specific raw path
+    private const val BASE_URL = "https://github.com/AhmadMorningstar/Islam/raw/refs/heads/main/app/src/main/assets/Dua"
 
     suspend fun downloadContent(context: Context, categories: List<DuaCategory>) {
-        // 1. Download categories.json
         val catFile = File(context.filesDir, "Dua/categories.json")
         catFile.parentFile?.mkdirs()
         downloadFile("$BASE_URL/categories.json", catFile)
 
-        // 2. Download each category content
         categories.filter { !it.isFavoriteFolder }.forEach { cat ->
             val targetFile = File(context.filesDir, "Dua/content/${cat.id}.json")
             targetFile.parentFile?.mkdirs()
@@ -426,9 +458,7 @@ object DuaDownloader {
             java.net.URL(url).openStream().use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 }
 
