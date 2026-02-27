@@ -19,3 +19,5 @@ local.properties
 app/google-services.json
 app/src/main/java/com/AhmadMorningstar/islam/SignatureVerifier.kt
 /Google-PlayStore
+build_and_install.bat
+app/src/main/assets/How to use new style.txt

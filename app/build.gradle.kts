@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
 }
@@ -36,29 +35,32 @@ android {
         buildConfig = true
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+    buildToolsVersion = "36.0.0"
+    ndkVersion = "29.0.14206865"
+}
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-        }
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
 dependencies {
-    // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    // Import Firebase BoM via version catalog
+    implementation(platform(libs.firebase.bom))
 
-    // TODO: Add the dependencies for Firebase products you want to use
-    // When using the BoM, don't specify versions in Firebase dependencies
-    implementation("com.google.firebase:firebase-analytics")
-    {
+    // Firebase Analytics with exclusions
+    implementation(libs.firebase.analytics) {
         exclude(group = "com.google.android.gms", module = "play-services-ads")
         exclude(group = "com.google.android.gms", module = "play-services-basement")
     }
-    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    // App Check Play Integrity
+    implementation(libs.firebase.appcheck.playintegrity)
+
+    implementation("io.github.cosinekitty:astronomy:2.1.19")
 
 
     // Add the dependencies for any other desired Firebase products
@@ -75,6 +77,7 @@ dependencies {
     implementation(libs.ui)
     implementation(libs.material3)
     implementation(libs.ui.tooling.preview)
+    implementation(libs.androidx.compose.ui.text)
     debugImplementation(libs.androidx.compose.ui.ui.tooling) // Correct debug implementation for tooling
 
     // Lifecycle for Compose

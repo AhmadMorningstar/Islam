@@ -13,11 +13,21 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/icon"
-        android:label="@string/app_name"
         android:roundIcon="@drawable/icon"
         android:supportsRtl="true"
+        android:label="@string/app_name_text"
         android:theme="@style/Theme.Islam"
-        android:usesCleartextTraffic="true" >
+        android:usesCleartextTraffic="true">
+
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
+
 
         <meta-data
             android:name="firebase_analytics_collection_enabled"

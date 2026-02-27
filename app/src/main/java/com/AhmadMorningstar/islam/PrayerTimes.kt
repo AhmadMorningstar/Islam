@@ -22,6 +22,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
+import android.content.Context
+import android.text.format.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.ui.res.stringResource
 import java.util.*
 
 // --- DATA MODEL Internal use
@@ -30,7 +35,13 @@ data class PrayerTimeItem(val name: String, val time: String, val icon: Int)
 @Composable
 fun PrayerTimesUI(theme: CompassTheme, region: String) {
     val context = LocalContext.current
-    val prayerNames = listOf("Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha")
+    val prayerNames = listOf("Fajr",
+        "Sunrise",
+        "Dhuhr",
+        "Asr",
+        "Maghrib",
+        "Isha"
+    )
     val prayerIcons = listOf(
         R.drawable.ic_prayer_times, R.drawable.ic_prayer_times,
         R.drawable.ic_prayer_times, R.drawable.ic_prayer_times,
@@ -139,11 +150,11 @@ fun PrayerTimesUI(theme: CompassTheme, region: String) {
         CountdownCard(nextName = nextPrayerName, countdown = countdownText, theme = theme)
         Spacer(Modifier.height(32.dp))
         Text(
-            text = "TODAY'S SCHEDULE",
+            text = stringResource(id = R.string.todays_schedule_label),
             color = theme.needleAlignedColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp,
+            style = LocalAppTypography.current.qiblaScreen.copy(
+                letterSpacing = 2.sp
+            ),
             modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
         )
 
@@ -186,11 +197,11 @@ fun CountdownCard(nextName: String, countdown: String, theme: CompassTheme) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "UP NEXT: $nextName",
+                text = stringResource(id = R.string.up_next_label, nextName),
                 color = theme.textColor.copy(0.6f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp
+                style = LocalAppTypography.current.qiblaScreen.copy(
+                    letterSpacing = 1.5.sp
+                )
             )
 
             Spacer(Modifier.height(12.dp))
@@ -206,10 +217,10 @@ fun CountdownCard(nextName: String, countdown: String, theme: CompassTheme) {
             }
 
             Text(
-                text = "REMAINING",
+                text = stringResource(id = R.string.remaining_label),
                 color = theme.needleAlignedColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black
+                style = LocalAppTypography.current.qiblaScreen
+
             )
         }
     }
@@ -225,6 +236,12 @@ fun PrayerRow(
     val rowBg by animateColorAsState(
         if (isNext) theme.needleAlignedColor.copy(0.1f) else Color.Transparent, label = ""
     )
+
+    // NEW: Get the context and format the time for display
+    val context = LocalContext.current
+    val displayTime = remember(prayer.time) {
+        formatTimeForDevice(context, prayer.time)
+    }
 
     Row(
         modifier = Modifier
@@ -251,7 +268,7 @@ fun PrayerRow(
         }
 
         Text(
-            text = prayer.time,
+            text = displayTime,
             color = if (isNext) theme.needleAlignedColor else theme.textColor,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold
@@ -282,4 +299,19 @@ private fun formatMillis(millis: Long): String {
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+private fun formatTimeForDevice(context: Context, rawTime: String): String {
+    val is24Hour = DateFormat.is24HourFormat(context)
+    if (is24Hour) return rawTime // JSON is already 24h, so return as-is
+
+    return try {
+        // Parse the 24h string and format it to 12h with AM/PM
+        val sdf24 = SimpleDateFormat("H:mm", Locale.getDefault())
+        val sdf12 = SimpleDateFormat("h:mm a", Locale.getDefault())
+        val date = sdf24.parse(rawTime)
+        if (date != null) sdf12.format(date) else rawTime
+    } catch (e: Exception) {
+        rawTime
+    }
 }

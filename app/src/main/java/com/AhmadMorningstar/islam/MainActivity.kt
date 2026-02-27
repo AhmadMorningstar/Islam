@@ -10,6 +10,7 @@ import android.graphics.Paint
 import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
+import androidx.appcompat.app.AppCompatActivity
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
@@ -17,7 +18,6 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -104,103 +104,22 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import androidx.activity.SystemBarStyle
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.core.os.LocaleListCompat
+import io.github.cosinekitty.astronomy.*
+import java.util.Calendar
+import java.util.TimeZone
 
 // ---------------------------------------------------------------------------
 // THEME CONFIGURATION
 // ---------------------------------------------------------------------------
-data class CompassTheme(
-    val name: String,
-    val isDark: Boolean,
-    val backgroundColor: Color,
-    val surfaceColor: Color,
-    val tickColor: Color,
-    val northColor: Color,
-    val needleDefaultColor: Color,
-    val needleAlignedColor: Color,
-    val textColor: Color,
-    val compassIconColor: Color,
-    val settingsIconColor: Color,
-    val verifiedColor: Color,
-    val maliciousColor: Color,
-)
-
-object AppThemes {
-    val Obsidian = CompassTheme(
-        "Obsidian Dark",
-        true,
-        Color(0xFF0A0E12),
-        Color.White.copy(0.05f),
-        Color.White, Color.Red,
-        Color(0xFFFF3D00),
-        Color(0xFF00FF88),
-        Color.White,
-        compassIconColor = Color(0xFF00FF88),
-        settingsIconColor = Color.White.copy(alpha = 0.7f),
-        verifiedColor = Color(0xFF00FF88),
-        maliciousColor = Color(0xFFFF3D00)
-    )
-    val PureLight = CompassTheme(
-        "Pure Light",
-        false,
-        Color(0xFFF5F5F7),
-        Color.Black.copy(0.05f),
-        Color.DarkGray, Color.Red,
-        Color(0xFF2C3E50),
-        Color(0xFF27AE60),
-        Color(0xFF1C1C1E),
-        compassIconColor = Color(0xFFFFA000),
-        settingsIconColor = Color(0xFF5D4037),
-        verifiedColor = Color(0xFF27AE60),
-        maliciousColor = Color(0xFFD32F2F)
-    )
-    val EmeraldNight = CompassTheme(
-        "Emerald Night", true,
-        Color(0xFF06120E),
-        Color.White.copy(0.03f),
-        Color(0xFF81C784),
-        Color.Red,
-        Color(0xFF4DB6AC),
-        Color(0xFF00E676),
-        Color.White,
-        compassIconColor = Color(0xFFFFA000),
-        settingsIconColor = Color(0xFF5D4037),
-        verifiedColor = Color(0xFF00E676),
-        maliciousColor = Color(0xFFFF5252)
-    )
-    val DesertGold = CompassTheme(
-        "Desert Gold",
-        false,
-        Color(0xFFFFF8E1),
-        Color(0xFF795548).copy(0.1f),
-        Color(0xFF5D4037),
-        Color.Red, Color(0xFF8D6E63),
-        Color(0xFFFFA000),
-        Color(0xFF3E2723),
-        compassIconColor = Color(0xFFFFA000),
-        settingsIconColor = Color(0xFF5D4037),
-        verifiedColor = Color(0xFF388E3C),
-        maliciousColor = Color(0xFFC62828)
-
-    )
-
-    val OceanDeep = CompassTheme(
-        name = "Ocean Deep",
-        isDark = true,
-        backgroundColor = Color(0xFF010B13), // Very dark navy
-        surfaceColor = Color(0xFF0A1929),    // Lighter navy surface
-        tickColor = Color(0xFF64B5F6),       // Light blue ticks
-        northColor = Color(0xFFFF5252),      // Bright coral north
-        needleDefaultColor = Color(0xFF00B0FF), // Vivid blue needle
-        needleAlignedColor = Color(0xFF00E5FF), // Cyan alignment
-        textColor = Color(0xFFE3F2FD),        // Soft blue-white text
-        compassIconColor = Color(0xFF00FF88), // Greenish
-        settingsIconColor = Color.White.copy(alpha = 0.7f), // Soft white
-        verifiedColor = Color(0xFF00E5FF),
-        maliciousColor = Color(0xFFFF5252)
-    )
-
-    val allThemes = listOf(Obsidian, PureLight, EmeraldNight, DesertGold, OceanDeep)
-}
 
 fun Context.findActivity(): MainActivity? {
     var context = this
@@ -211,9 +130,9 @@ fun Context.findActivity(): MainActivity? {
     return null
 }
 
-enum class Screen { Home, Prayer, Settings }
+enum class Screen { Home, Prayer, Dua, Settings }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val updateResultLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -223,6 +142,7 @@ class MainActivity : ComponentActivity() {
             checkForUpdates()
         }
     }
+
     private val currentRegionState = mutableStateOf("erbil")
     private lateinit var themePrefs: ThemePreferences
     private val currentScreen = mutableStateOf(Screen.Prayer)
@@ -240,9 +160,12 @@ class MainActivity : ComponentActivity() {
     private val northDirectionState = mutableStateOf(0f)
     private val magneticStrengthState = mutableStateOf(0f)
 
-
     val sunAzimuthState = derivedStateOf {
         locationState.value?.let { loc -> calculateSunAzimuth(loc.latitude, loc.longitude) }
+    }
+
+    val moonAzimuthState = derivedStateOf {
+        locationState.value?.let { loc -> calculateMoonAzimuth(loc.latitude, loc.longitude) }
     }
 
     private val qiblaDirectionState = derivedStateOf {
@@ -252,7 +175,6 @@ class MainActivity : ComponentActivity() {
     private val distanceToKaabaState = derivedStateOf {
         locationState.value?.let { loc -> calculateDistance(loc.latitude, loc.longitude) }
     }
-
     private fun checkForUpdates() {
         val appUpdateManager = AppUpdateManagerFactory.create(this)
         appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
@@ -275,49 +197,57 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun calculateSunAzimuth(lat: Double, lon: Double): Double {
-        // 1. Load the saved timezone
-        val tzId = themePrefs.getSavedTimezone()
-        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(tzId))
+        try {
+            val observer = Observer(lat, lon, 0.0)
 
-        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-        val minute = calendar.get(java.util.Calendar.MINUTE)
+            // Get timezone from preferences (if you want custom timezone)
+            val tzId = themePrefs.getSavedTimezone()
+            val calendar = Calendar.getInstance(TimeZone.getTimeZone(tzId))
 
-        val dayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
-        val totalHours = hour + (minute / 60.0)
+            val year = calendar.get(Calendar.YEAR)
+            val month = calendar.get(Calendar.MONTH) + 1
+            val day = calendar.get(Calendar.DAY_OF_MONTH)
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = calendar.get(Calendar.MINUTE)
+            val second = calendar.get(Calendar.SECOND).toDouble()
 
-        // ... rest of your existing math ...
-        val decl = 23.45 * sin(Math.toRadians(360.0 / 365.0 * (dayOfYear - 81)))
-        val latRad = Math.toRadians(lat)
-        val declRad = Math.toRadians(decl)
-        val hourAngle = Math.toRadians(15.0 * (totalHours - 12.0))
-        val y = -sin(hourAngle)
-        val x = (cos(latRad) * kotlin.math.tan(declRad)) -
-                (sin(latRad) * cos(hourAngle))
+            val time = Time(year, month, day, hour, minute, second)
 
-        return (Math.toDegrees(atan2(y, x)) + 360) % 360
+            val equ = equator(Body.Sun, time, observer, EquatorEpoch.OfDate, Aberration.Corrected)
+            val hor = horizon(time, observer, equ.ra, equ.dec, Refraction.Normal)
+
+            return hor.azimuth
+        } catch (e: Exception) {
+            android.util.Log.e("SunAzimuth", "Error: ${e.message}")
+            return 0.0
+        }
     }
 
     private fun calculateMoonAzimuth(lat: Double, lon: Double): Double {
-        val tzId = themePrefs.getSavedTimezone()
-        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(tzId))
+        try {
+            val observer = Observer(lat, lon, 0.0)
 
-        val dayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
-        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-        val minute = calendar.get(java.util.Calendar.MINUTE)
-        val totalHours = hour + (minute / 60.0)
+            val tzId = themePrefs.getSavedTimezone()
+            val calendar = Calendar.getInstance(TimeZone.getTimeZone(tzId))
 
-        // The Moon moves approx 13.17° per day relative to stars
-        // This is a robust approximation for visual calibration
-        val moonPhaseAngle = (dayOfYear % 29.5) * (360 / 29.5)
-        val hourAngle = Math.toRadians(15.0 * (totalHours - 12.0) - moonPhaseAngle)
+            val year = calendar.get(Calendar.YEAR)
+            val month = calendar.get(Calendar.MONTH) + 1
+            val day = calendar.get(Calendar.DAY_OF_MONTH)
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = calendar.get(Calendar.MINUTE)
+            val second = calendar.get(Calendar.SECOND).toDouble()
 
-        val latRad = Math.toRadians(lat)
-        val y = -sin(hourAngle)
-        val x = (cos(latRad) * 0.3) - (sin(latRad) * cos(hourAngle))
+            val time = Time(year, month, day, hour, minute, second)
 
-        return (Math.toDegrees(atan2(y, x)) + 360) % 360
+            val equ = equator(Body.Moon, time, observer, EquatorEpoch.OfDate, Aberration.Corrected)
+            val hor = horizon(time, observer, equ.ra, equ.dec, Refraction.Normal)
+
+            return hor.azimuth
+        } catch (e: Exception) {
+            android.util.Log.e("MoonAzimuth", "Error: ${e.message}")
+            return 0.0
+        }
     }
-
     private fun isGpsEnabled(): Boolean {
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
@@ -342,69 +272,70 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
     private fun checkAppSecurity() {
         val prefs = getSharedPreferences("security_prefs", MODE_PRIVATE)
         val lastCheck = prefs.getLong("last_integrity_check", 0L)
         val currentTime = System.currentTimeMillis()
 
-        // Battery Saver: Only check once every 24 hours
-        // (86400000 milliseconds = 24 hours)
-        if (currentTime - lastCheck < 86400000) {
-            return
-        }
+        // Skip check if verified within the last 24 hours to save battery/quota
+        if (currentTime - lastCheck < 86400000) return
 
         FirebaseAppCheck.getInstance().getAppCheckToken(false)
             .addOnSuccessListener {
-                // Update the timestamp on success
                 prefs.edit().putLong("last_integrity_check", currentTime).apply()
                 android.util.Log.d("Security", "Integrity Check Passed!")
             }
             .addOnFailureListener { e ->
+                val errorMsg = e.message ?: "Unknown Error"
+                android.util.Log.e("Security", "App Check failed: $errorMsg")
 
-                val errorMsg = e.message ?: ""
-                val isNetworkError = errorMsg.contains("network", ignoreCase = true) ||
-                        errorMsg.contains("connection", ignoreCase = true) ||
-                        errorMsg.contains("timeout", ignoreCase = true)
+                // 1. Ignore Network Issues (Don't annoy users if they are offline)
+                if (errorMsg.contains("network", true) || errorMsg.contains("timeout", true)) {
+                    return@addOnFailureListener
+                }
 
-                if (!isNetworkError) {
-                    showIntegrityWarning()
+                // 2. Handle Configuration Errors (Developer side - SHA-256 missing in Firebase)
+                if (errorMsg.contains("403") || errorMsg.contains("not found")) {
+                    // We don't show the "Malware" warning here because this is usually
+                    // a developer configuration mistake, not a user security risk.
+                    return@addOnFailureListener
+                }
+
+                // 3. THE "TAMPERED / UNAUTHORIZED" WARNING
+                // Triggered by: ERROR_APP_NOT_OWNED (-10), Rooted devices, or modified APKs
+                if (errorMsg.contains("-10") ||
+                    errorMsg.contains("integrity", true) ||
+                    errorMsg.contains("attestation", true)) {
+
+                    showOfficialStoreRedirect(
+                        title = "Security Risk Detected",
+                        message = "This app version was not recognized by Google Play. It may have been modified by a third party and could contain malware. \n\nFor your safety, please uninstall this and download the official version."
+                    )
                 }
             }
     }
 
-    private fun showIntegrityWarning() {
+    private fun showOfficialStoreRedirect(title: String, message: String) {
         runOnUiThread {
+            val appPackageName = packageName
             androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Security Warning")
-                .setMessage("Your device or app may be tampered. For Security Concerns Please only download from Play Store.")
-                .setCancelable(false)
-                .setPositiveButton("Continue") { dialog, _ -> dialog.dismiss() }
-                .setNegativeButton("Go to Play Store") { dialog, _ ->
-                    val appPackageName = packageName
+                .setTitle(title)
+                .setMessage(message)
+                .setCancelable(false) // User MUST take action
+                .setPositiveButton("Get Official App") { _, _ ->
                     try {
-                        startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("market://details?id=$appPackageName")
-                            )
-                        )
-                    } catch (anfe: android.content.ActivityNotFoundException) {
-                        startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")
-                            )
-                        )
+                        // Try to open the Play Store app first
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$appPackageName")))
+                    } catch (e: Exception) {
+                        // Fallback to browser if Play Store app is missing
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")))
                     }
-                    dialog.dismiss()
+                }
+                .setNegativeButton("Exit App") { _, _ ->
+                    finishAffinity() // Close the app entirely
                 }
                 .show()
         }
-    }
-
-    val moonAzimuthState = derivedStateOf {
-        locationState.value?.let { loc -> calculateMoonAzimuth(loc.latitude, loc.longitude) }
     }
 
     private val sensorEventListener = object : SensorEventListener {
@@ -525,18 +456,25 @@ class MainActivity : ComponentActivity() {
         checkForUpdates()
 
         super.onCreate(savedInstanceState)
+        val currentLocale = AppCompatDelegate.getApplicationLocales().get(0)?.language
+        if (currentLocale == null) {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
+        }
         themePrefs = ThemePreferences(this)
         currentRegionState.value = themePrefs.getSavedRegion()
         val savedName = themePrefs.getSavedThemeName()
         val themeToLoad = AppThemes.allThemes.find { it.name == savedName } ?: AppThemes.Obsidian
         currentThemeState.value = themeToLoad
+
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
 
         setContent {
             val screen by currentScreen
             val theme by currentThemeState
-
+            var currentLanguage by remember { mutableStateOf(themePrefs.getSavedLanguage()) }
+            val typography = rememberAppTypography(currentLanguage)
             var gpsEnabled by remember { mutableStateOf(isGpsEnabled()) }
             var permissionGranted by remember {
                 mutableStateOf(
@@ -546,7 +484,6 @@ class MainActivity : ComponentActivity() {
                     ) == PackageManager.PERMISSION_GRANTED
                 )
             }
-
             // --- THE LIFECYCLE OBSERVER (Keep this here) ---
             val lifecycleOwner = LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
@@ -563,86 +500,128 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
+            val context = LocalContext.current
+            val configuration = LocalConfiguration.current
+
+            val localizedContext = remember(currentLanguage, configuration) {
+                val locale = Locale(currentLanguage)
+                Locale.setDefault(locale)
+
+                // Create a copy of the current configuration
+                val configCopy = android.content.res.Configuration(configuration)
+                configCopy.setLocale(locale)
+                configCopy.setLayoutDirection(locale)
+
+                context.createConfigurationContext(configCopy)
+            }
+
+            val layoutDirection = if (currentLanguage == "ar" || currentLanguage == "ku") {
+                LayoutDirection.Rtl
+            } else {
+                LayoutDirection.Ltr
+            }
             // --- THE CLEANED UP UI STRUCTURE ---
-            // We use ONE root Box to keep everything layered correctly
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(theme.backgroundColor)
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalAppTypography provides typography,
+                LocalLayoutDirection provides if (currentLanguage == "ar" || currentLanguage == "ku")
+                    LayoutDirection.Rtl else LayoutDirection.Ltr
             ) {
-                // LAYER 1: Your Main App Content
-                Column(
-                    modifier = Modifier.fillMaxSize()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(theme.backgroundColor)
                 ) {
-                    when (screen) {
-                        Screen.Home -> {
-                            // WRAPPER BOX: Holds Compass + Overlay
-                            Box(modifier = Modifier.fillMaxSize()) {
+                    // LAYER 1: Your Main App Content
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        when (screen) {
+                            Screen.Home -> {
+                                // WRAPPER BOX: Holds Compass + Overlay
+                                Box(modifier = Modifier.fillMaxSize()) {
 
-                                // 1. The Compass UI (Always renders underneath)
-                                QiblaCompassUI(
-                                    theme = theme,
-                                    qiblaDirection = qiblaDirectionState.value,
-                                    northDirection = northDirectionState.value,
-                                    distance = distanceToKaabaState.value,
-                                    sensorAccuracy = sensorAccuracyState.value,
-                                    magneticStrength = magneticStrengthState.value,
-                                    location = locationState.value?.let {
-                                        Pair(
-                                            it.latitude,
-                                            it.longitude
-                                        )
-                                    },
-                                    isDeviceFlat = isDeviceFlatState.value
-                                )
-
-                                // 2. The GPS Overlay (Only shows HERE, on top of compass)
-                                if (!permissionGranted || !gpsEnabled) {
-                                    LocationRequiredOverlay(
-                                        isGpsOff = !gpsEnabled,
-                                        isPermissionDenied = !permissionGranted,
-                                        onActionClick = {
-                                            if (!permissionGranted) {
-                                                val intent =
-                                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                        data = Uri.fromParts("package", packageName, null)
-                                                    }
-                                                startActivity(intent)
-                                            } else {
-                                                requestGpsEnable()
-                                            }
-                                        }
+                                    // 1. The Compass UI (Always renders underneath)
+                                    QiblaCompassUI(
+                                        theme = theme,
+                                        qiblaDirection = qiblaDirectionState.value,
+                                        northDirection = northDirectionState.value,
+                                        distance = distanceToKaabaState.value,
+                                        sensorAccuracy = sensorAccuracyState.value,
+                                        magneticStrength = magneticStrengthState.value,
+                                        location = locationState.value?.let {
+                                            Pair(
+                                                it.latitude,
+                                                it.longitude
+                                            )
+                                        },
+                                        isDeviceFlat = isDeviceFlatState.value,
+                                        sunAngle = sunAzimuthState.value?.toFloat(),
+                                        moonAngle = moonAzimuthState.value?.toFloat()
                                     )
+
+                                    // 2. The GPS Overlay (Only shows HERE, on top of compass)
+                                    if (!permissionGranted || !gpsEnabled) {
+                                        LocationRequiredOverlay(
+                                            isGpsOff = !gpsEnabled,
+                                            isPermissionDenied = !permissionGranted,
+                                            onActionClick = {
+                                                if (!permissionGranted) {
+                                                    val intent =
+                                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                            data = Uri.fromParts(
+                                                                "package",
+                                                                packageName,
+                                                                null
+                                                            )
+                                                        }
+                                                    startActivity(intent)
+                                                } else {
+                                                    requestGpsEnable()
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        Screen.Prayer -> {
-                            PrayerTimesUI(
-                                theme = theme,
-                                region = currentRegionState.value
-                            )
-                        }
+                            Screen.Prayer -> {
+                                PrayerTimesUI(
+                                    theme = theme,
+                                    region = currentRegionState.value
+                                )
+                            }
 
-                        Screen.Settings -> {
-                            SettingsUI(
-                                theme = theme,
-                                onThemeSelected = { newTheme ->
-                                    currentThemeState.value = newTheme
-                                    themePrefs.saveTheme(newTheme.name)
-                                },
-                                currentRegion = currentRegionState.value,
-                                onRegionSelected = { newRegion ->
-                                    currentRegionState.value = newRegion
-                                    themePrefs.saveRegion(newRegion)
-                                }
-                            )
+                            Screen.Dua -> {
+                                DuaUI(theme = theme)
+                            }
+
+                            Screen.Settings -> {
+                                SettingsUI(
+                                    theme = theme,
+                                    onThemeSelected = { newTheme ->
+                                        currentThemeState.value = newTheme
+                                        themePrefs.saveTheme(newTheme.name)
+                                    },
+                                    currentRegion = currentRegionState.value,
+                                    onRegionSelected = { newRegion ->
+                                        currentRegionState.value = newRegion
+                                        themePrefs.saveRegion(newRegion)
+                                    },
+                                    // ADD THESE TWO LINES:
+                                    currentLanguage = currentLanguage,
+                                    onLanguageSelected = { newLang ->
+                                        currentLanguage = newLang
+                                        themePrefs.saveLanguage(newLang)
+                                    }
+                                )
+                            }
                         }
                     }
-                }
 
-                // LAYER 2: Your Navigation (stays on top of the content)
-                ModernBottomNav(screen, { currentScreen.value = it }, theme)
+                    // LAYER 2: Your Navigation (stays on top of the content)
+                    ModernBottomNav(screen, { currentScreen.value = it }, theme)
+                }
             }
         }
     }
@@ -657,6 +636,8 @@ class MainActivity : ComponentActivity() {
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return r * c
     }
+
+
 
     private fun calculateQibla(userLat: Double, userLon: Double): Double {
         val deltaLon = Math.toRadians(kaabaLon - userLon)
@@ -762,8 +743,7 @@ fun shortestAngle(from: Float, to: Float): Float {
 
 // ---------------------------------------------------------------------------
 // UI COMPONENTS
-// ---------------------------------------------------------------------------
-
+// --------------------------------------------------------------------------
 @Composable
 fun ModernBottomNav(
     currentScreen: Screen,
@@ -791,7 +771,7 @@ fun ModernBottomNav(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 NavButton(
-                    "Qibla",
+                    stringResource(id = R.string.navbutton_qibla_label),
                     Screen.Home,
                     iconRes = R.drawable.ic_compass,
                     iconColor = theme.compassIconColor,
@@ -799,7 +779,7 @@ fun ModernBottomNav(
                     theme
                 ) { onScreenSelected(Screen.Home) }
                 NavButton(
-                    "Prayers",
+                    stringResource(id = R.string.navbutton_prayers_label),
                     Screen.Prayer,
                     iconRes = R.drawable.ic_prayer_times,
                     iconColor = theme.needleAlignedColor,
@@ -807,7 +787,15 @@ fun ModernBottomNav(
                     theme
                 ) { onScreenSelected(Screen.Prayer) }
                 NavButton(
-                    "Settings",
+                    stringResource(id = R.string.navbutton_duas_and_dhikr_label),
+                    Screen.Dua,
+                    R.drawable.ic_dua,
+                    theme.verifiedColor,
+                    currentScreen == Screen.Dua,
+                    theme
+                ) { onScreenSelected(Screen.Dua) }
+                NavButton(
+                    stringResource(id = R.string.settings_label),
                     Screen.Settings,
                     iconRes = R.drawable.ic_settings,
                     iconColor = theme.settingsIconColor,
@@ -881,25 +869,26 @@ fun QiblaCompassUI(
     magneticStrength: Float,
     location: Pair<Double, Double>?,
     isDeviceFlat: Boolean,
+    sunAngle: Float?,
+    moonAngle: Float?,
+
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val activity = remember(context) { context.findActivity() }
-    val sunAngle = activity?.sunAzimuthState?.value?.toFloat()
-    val moonAngle = activity?.moonAzimuthState?.value?.toFloat()
-    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-    hour in 6..18
     val themePrefs = remember { ThemePreferences(context) }
-
-    // --- ADD THESE THREE LINES TO FIX THE ERRORS ---
     var hasVibrated by remember { mutableStateOf(false) }
-    val vibStrength = themePrefs.getVibStrength() // Loads from SharedPreferences
-    val vibSpeed = themePrefs.getVibSpeed()       // Loads from SharedPreferences
+    val vibStrength = themePrefs.getVibStrength()
+    val vibSpeed = themePrefs.getVibSpeed()
     // -----------------------------------------------
 
     val qiblaAngle = qiblaDirection?.toFloat() ?: 0f
     val angleDifference = shortestAngle(northDirection, qiblaAngle)
     val isAligned = qiblaDirection != null && abs(angleDifference) < 3
 
+    val formattedDistance = remember(distance) {
+        val distInt = distance?.toInt() ?: 0
+        val nf = java.text.NumberFormat.getIntegerInstance(java.util.Locale.getDefault())
+        nf.format(distInt)
+    }
     LaunchedEffect(isAligned) {
         if (isAligned && !hasVibrated && themePrefs.isVibrationEnabled()) {
             // Use the base class 'Vibrator' to maintain compatibility across API levels
@@ -979,11 +968,19 @@ fun QiblaCompassUI(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = if (location == null) "SEARCHING GPS..." else "GPS ACTIVE",
+                text = if (location == null) {
+                    stringResource(id = R.string.searching_gps_label)
+                }
+                else {
+                    stringResource(id = R.string.gps_active_label)
+                },
                 color = if (location == null) Color.Yellow.copy(0.8f) else theme.textColor.copy(0.4f),
-                fontSize = 10.sp,
-                letterSpacing = 2.sp
+                style = LocalAppTypography.current.qiblaScreen.copy(
+                    letterSpacing = 2.sp
+                )
             )
+
+
 
             Spacer(Modifier.height(20.dp))
 
@@ -1004,10 +1001,13 @@ fun QiblaCompassUI(
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (isAligned) "ALIGNED WITH KAABA" else "ROTATE TO ALIGN",
+                    text = if (isAligned) {
+                        stringResource(id = R.string.aligned_kaaba_label)
+                    } else {
+                        stringResource(id = R.string.rotate_align_label)
+                    },
                     color = if (isAligned) theme.needleAlignedColor else theme.textColor.copy(0.6f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = LocalAppTypography.current.qiblaScreen,
                     letterSpacing = 2.sp
                 )
 
@@ -1026,10 +1026,9 @@ fun QiblaCompassUI(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            "${distance.toInt()} KM TO MECCA",
+                            text = stringResource(id = R.string.distance_to_mecca_label, formattedDistance),
                             color = theme.textColor.copy(alpha = 0.7f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            style = LocalAppTypography.current.qiblaScreen,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
@@ -1055,10 +1054,11 @@ fun CalibrationMeter(strength: Float, accuracy: Int, theme: CompassTheme, modifi
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "COMPASS ACCURACY",
+                stringResource(id = R.string.qibla_accuracy_label),
                 color = theme.textColor.copy(0.4f),
-                fontSize = 9.sp,
-                letterSpacing = 1.sp
+                style = LocalAppTypography.current.qiblaScreen.copy(
+                    letterSpacing = 1.sp
+                )
             )
             Spacer(Modifier.width(8.dp))
             Box(
@@ -1069,10 +1069,9 @@ fun CalibrationMeter(strength: Float, accuracy: Int, theme: CompassTheme, modifi
         }
         if (isInterfered) {
             Text(
-                "METAL INTERFERENCE",
+                stringResource(id = R.string.metal_interference),
                 color = Color.Red,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold
+                style = LocalAppTypography.current.qiblaScreen
             )
         }
     }
@@ -1087,14 +1086,21 @@ fun CompassFace(
     theme: CompassTheme,
 ) {
     val kaabaBitmap = ImageBitmap.imageResource(id = R.drawable.kaaba)
+    val sunPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_sun)
+    val moonPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_moon)
     val textPaint = remember(theme) {
         Paint().apply {
             isAntiAlias = true
             textSize = 42f
             textAlign = Paint.Align.CENTER
-            color = theme.textColor.toArgb() // DYNAMIC TEXT COLOR
+            color = theme.textColor.toArgb()
         }
     }
+
+    val labelN = stringResource(id = R.string.cardinal_directions_n)
+    val labelE = stringResource(id = R.string.cardinal_directions_e)
+    val labelS = stringResource(id = R.string.cardinal_directions_s)
+    val labelW = stringResource(id = R.string.cardinal_directions_w)
 
     Canvas(modifier = modifier) {
         val radius = size.minDimension / 2.2f
@@ -1119,11 +1125,15 @@ fun CompassFace(
                     ),
                     strokeWidth = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
                 )
+
                 if (isCardinal) {
                     val label = when (angle) {
-                        0 -> "N"; 90 -> "E"; 180 -> "S"; 270 -> "W"; else -> ""
+                        0   -> labelN
+                        90  -> labelE
+                        180 -> labelS
+                        270 -> labelW
+                        else -> ""
                     }
-                    // North stays Red, others follow theme text color
                     textPaint.color =
                         if (angle == 0) android.graphics.Color.RED else theme.textColor.toArgb()
                     drawContext.canvas.nativeCanvas.drawText(
@@ -1138,33 +1148,31 @@ fun CompassFace(
 
         sunAngle?.let { angle ->
             rotate(angle) {
-                // Draw a yellow "Sun" circle or icon at the edge of the compass
-                drawCircle(
-                    color = Color(0xFFFFD700), // Gold/Yellow
-                    radius = 8.dp.toPx(),
-                    center = Offset(center.x, center.y - radius + 15.dp.toPx())
-                )
+                val iconSizePx = 24.dp.toPx() // Increased slightly for visibility
+                val xOffset = center.x - (iconSizePx / 2)
+                val yOffset = center.y - radius + 10.dp.toPx()
+
+                translate(left = xOffset, top = yOffset) {
+                    with(sunPainter) {
+                        draw(size = androidx.compose.ui.geometry.Size(iconSizePx, iconSizePx))
+                    }
+                }
             }
         }
 
         moonAngle?.let { angle ->
             rotate(angle) {
-                // Outer glow for the moon
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.3f),
-                    radius = 10.dp.toPx(),
-                    center = Offset(center.x, center.y - radius + 15.dp.toPx())
-                )
-                // The Moon itself
-                drawCircle(
-                    color = Color(0xFFE0E0E0), // Silver/Moonlight
-                    radius = 6.dp.toPx(),
-                    center = Offset(center.x, center.y - radius + 15.dp.toPx())
-                )
+                val iconSizePx = 22.dp.toPx()
+                val xOffset = center.x - (iconSizePx / 2)
+                val yOffset = center.y - radius + 10.dp.toPx()
+
+                translate(left = xOffset, top = yOffset) {
+                    with(moonPainter) {
+                        draw(size = androidx.compose.ui.geometry.Size(iconSizePx, iconSizePx))
+                    }
+                }
             }
         }
-
-
 
         rotate(qiblaAngle) {
             val iconSize = 48.dp.toPx()
@@ -1203,7 +1211,10 @@ fun CalibrationPrompt(theme: CompassTheme) {
             .fillMaxSize()
             .background(theme.backgroundColor.copy(0.95f)), Alignment.Center
     ) {
-        Text("Move Phone in ∞ Shape", color = theme.textColor)
+        Text(stringResource(id = R.string.move_phone_label),
+            color = theme.textColor,
+            style = LocalAppTypography.current.qiblaScreen,
+        )
     }
 }
 
@@ -1214,12 +1225,41 @@ fun DeviceNotFlatPrompt(theme: CompassTheme) {
             .fillMaxSize()
             .background(theme.backgroundColor.copy(0.95f)), Alignment.Center
     ) {
-        Text("Hold Phone Level", color = theme.textColor)
+        Text(stringResource(id = R.string.phone_level_label),
+            color = theme.textColor,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
 class ThemePreferences(context: Context) {
     private val sharedPrefs = context.getSharedPreferences("qibla_prefs", Context.MODE_PRIVATE)
+
+    // --- LANGUAGE ---
+    fun saveLanguage(langCode: String) {
+        sharedPrefs.edit().putString("selected_lang", langCode).apply()
+    }
+
+    fun getSavedLanguage(): String {
+        return sharedPrefs.getString("selected_lang", "en") ?: "en"
+    }
+
+    // --- FAVORITES ---
+    fun toggleFavorite(duaId: String) {
+        val favorites = getFavorites().toMutableSet()
+        if (favorites.contains(duaId)) favorites.remove(duaId)
+        else favorites.add(duaId)
+        sharedPrefs.edit().putStringSet("dua_favorites", favorites).apply()
+    }
+
+    fun isFavorite(duaId: String): Boolean {
+        return getFavorites().contains(duaId)
+    }
+
+    fun getFavorites(): Set<String> {
+        return sharedPrefs.getStringSet("dua_favorites", emptySet()) ?: emptySet()
+    }
 
     // --- THEME ---
     fun saveTheme(themeName: String) {
@@ -1363,10 +1403,10 @@ object AppUpdateChecker {
 
 fun showForceUpdateDialog(context: Context, message: String) {
     androidx.appcompat.app.AlertDialog.Builder(context)
-        .setTitle("Update Required")
+        .setTitle(context.getString(R.string.forced_update_dialog))
         .setMessage(message)
         .setCancelable(false)
-        .setPositiveButton("Update") { _, _ ->
+        .setPositiveButton(context.getString(R.string.optional_update_btn_update_label)) { _, _ ->
             context.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
             )
@@ -1383,16 +1423,22 @@ fun showForceUpdateDialog(context: Context, message: String) {
         .show()
 }
 
+
 fun showOptionalUpdateDialog(context: Context, message: String) {
     androidx.appcompat.app.AlertDialog.Builder(context)
-        .setTitle("Update Available")
+        .setTitle(context.getString(R.string.title_update_available_label))
         .setMessage(message)
         .setCancelable(true)
-        .setPositiveButton("Update") { _, _ ->
+        .setPositiveButton(
+            context.getString(R.string.optional_update_btn_update_label)
+        )
+        { _, _ ->
             context.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}"))
             )
         }
-        .setNegativeButton("Later", null)
+        .setNegativeButton(
+            context.getString(R.string.optional_update_btn_update_later_label),
+            null)
         .show()
 }
