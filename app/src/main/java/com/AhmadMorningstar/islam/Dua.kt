@@ -259,22 +259,20 @@ fun FlashcardView(
     val context = LocalContext.current
     val mediaPlayer = remember { android.media.MediaPlayer() }
     var isPlaying by remember { mutableStateOf(false) }
-    var isPrepared by remember { mutableStateOf(false) }
     var duration by remember { mutableStateOf("0:00") }
 
-    // Remove the backslashes!
-    val audioUrl = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/app/src/main/assets/Dua/content/audio/${category?.id}/${dua.audioUrl}"
+    val audioUrl = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/app/src/main/assets/Dua/content/audio/\${category?.id}/\${dua.audioUrl}"
+
 
     LaunchedEffect(dua.id) {
         isPlaying = false
-        isPrepared = false
-        duration = "Loading..."
+        duration = "..."
         try {
             mediaPlayer.reset()
             mediaPlayer.setDataSource(audioUrl)
 
+            // We use a listener because network calls take time
             mediaPlayer.setOnPreparedListener { mp ->
-                isPrepared = true
                 val totalSeconds = mp.duration / 1000
                 duration = String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60)
             }
@@ -283,23 +281,26 @@ fun FlashcardView(
                 isPlaying = false
             }
 
-            mediaPlayer.setOnErrorListener { _, _, _ ->
-                duration = "Error"
-                false
-            }
-
-            mediaPlayer.prepareAsync()
+            mediaPlayer.prepareAsync() // Don't block the UI thread
         } catch (e: Exception) {
             duration = "Error"
         }
     }
 
-    // Stop and Release logic (Same as before)
+    // Stop audio if user leaves or swipes
     DisposableEffect(dua.id) {
-        onDispose { if (mediaPlayer.isPlaying) mediaPlayer.stop() }
+        onDispose {
+            if (mediaPlayer.isPlaying) {
+                mediaPlayer.stop()
+            }
+        }
     }
+
+    // Full cleanup
     DisposableEffect(Unit) {
-        onDispose { mediaPlayer.release() }
+        onDispose {
+            mediaPlayer.release()
+        }
     }
 
 
@@ -336,75 +337,50 @@ fun FlashcardView(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // --- MINI PLAYER & COUNTER ---
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Play Button
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Play/Pause Button
             Surface(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clickable {
-                        try {
-                            if (isPlaying) {
-                                mediaPlayer.pause()
-                            } else {
-                                mediaPlayer.start()
-                            }
-                            isPlaying = !isPlaying
-                        } catch (e: Exception) { /* Handle player not ready */ }
-                    },
+                modifier = Modifier.size(50.dp).clickable {
+                    if (isPlaying) mediaPlayer.pause() else mediaPlayer.start()
+                    isPlaying = !isPlaying
+                },
                 shape = CircleShape,
-                color = theme.needleAlignedColor.copy(0.15f),
-                border = BorderStroke(1.dp, theme.needleAlignedColor.copy(0.3f))
+                color = theme.needleAlignedColor.copy(0.2f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(if (isPlaying) "⏸" else "▶", color = theme.needleAlignedColor, fontSize = 24.sp)
+                    Text(if (isPlaying) "⏸" else "▶", color = theme.needleAlignedColor, fontSize = 20.sp)
                 }
             }
 
-            Spacer(modifier = Modifier.width(24.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-            // Main Counter (With long-press to reset)
+            // Main Tap Counter
             Surface(
-                modifier = Modifier
-                    .size(90.dp)
-                    .clickable(enabled = !isComplete) { count++ },
+                modifier = Modifier.size(80.dp).clickable(enabled = !isComplete) { count++ },
                 shape = CircleShape,
                 color = if (isComplete) theme.needleAlignedColor else theme.surfaceColor,
-                border = BorderStroke(3.dp, theme.needleAlignedColor)
+                border = BorderStroke(2.dp, theme.needleAlignedColor)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = if (isComplete) "✓" else "$count / ${dua.targetCount}",
                         color = if (isComplete) theme.backgroundColor else theme.textColor,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
 
-        Text(
-            text = "Duration: $duration",
-            color = theme.textColor.copy(0.6f),
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 12.dp)
-        )
-
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- SECTIONS ---
+        // Expandable Sections
         ExpandableSection("Translation", dua.translation, theme)
         ExpandableSection("Transliteration", dua.transliteration, theme)
         if (dua.virtue.isNotEmpty()) ExpandableSection("Virtue", dua.virtue, theme)
         if (dua.explanation.isNotEmpty()) ExpandableSection("Explanation", dua.explanation, theme)
-
-        Spacer(modifier = Modifier.height(32.dp))
 
         // Bottom Action Buttons (Source & Audio)
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalArrangement = Arrangement.SpaceEvenly) {

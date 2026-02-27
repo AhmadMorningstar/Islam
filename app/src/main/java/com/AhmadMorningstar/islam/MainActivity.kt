@@ -1339,6 +1339,11 @@ fun LocationRequiredOverlay(
     }
 }
 
+data class DuaMetadata(
+    val latestVersion: Int,
+    val message: String
+)
+
 data class UpdateConfig(
     val min_version: Long,
     val latest_version: Long,
