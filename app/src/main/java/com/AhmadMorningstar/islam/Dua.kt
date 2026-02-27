@@ -254,35 +254,52 @@ fun FlashcardView(
     category: DuaCategory?,
     onSourceClick: () -> Unit
 ) {
-    var count by remember { mutableStateOf(0) }
+    var count by remember(dua.id) { mutableStateOf(0) }
     val isComplete = count >= dua.targetCount
-
     val context = LocalContext.current
     val mediaPlayer = remember { android.media.MediaPlayer() }
     var isPlaying by remember { mutableStateOf(false) }
+    var isPrepared by remember { mutableStateOf(false) }
     var duration by remember { mutableStateOf("0:00") }
 
-    val audioUrl = "https://github.com/AhmadMorningstar/Islam/raw/refs/heads/main/app/src/main/assets/Dua/content/audio/${category?.id}/${dua.audioUrl}"
-
+    // Remove the backslashes!
+    val audioUrl = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/app/src/main/assets/Dua/content/audio/${category?.id}/${dua.audioUrl}"
 
     LaunchedEffect(dua.id) {
+        isPlaying = false
+        isPrepared = false
+        duration = "Loading..."
         try {
             mediaPlayer.reset()
             mediaPlayer.setDataSource(audioUrl)
-            mediaPlayer.prepareAsync()
+
             mediaPlayer.setOnPreparedListener { mp ->
-                val seconds = mp.duration / 1000
-                duration = String.format("%d:%02d", seconds / 60, seconds % 60)
+                isPrepared = true
+                val totalSeconds = mp.duration / 1000
+                duration = String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60)
             }
-            mediaPlayer.setOnCompletionListener { isPlaying = false }
-        } catch (e: Exception) { duration = "Error" }
+
+            mediaPlayer.setOnCompletionListener {
+                isPlaying = false
+            }
+
+            mediaPlayer.setOnErrorListener { _, _, _ ->
+                duration = "Error"
+                false
+            }
+
+            mediaPlayer.prepareAsync()
+        } catch (e: Exception) {
+            duration = "Error"
+        }
     }
 
-    // Clean up player when leaving screen
+    // Stop and Release logic (Same as before)
+    DisposableEffect(dua.id) {
+        onDispose { if (mediaPlayer.isPlaying) mediaPlayer.stop() }
+    }
     DisposableEffect(Unit) {
-        onDispose {
-            mediaPlayer.release()
-        }
+        onDispose { mediaPlayer.release() }
     }
 
 
@@ -319,50 +336,75 @@ fun FlashcardView(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Play/Pause Button
+        // --- MINI PLAYER & COUNTER ---
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Play Button
             Surface(
-                modifier = Modifier.size(50.dp).clickable {
-                    if (isPlaying) mediaPlayer.pause() else mediaPlayer.start()
-                    isPlaying = !isPlaying
-                },
+                modifier = Modifier
+                    .size(60.dp)
+                    .clickable {
+                        try {
+                            if (isPlaying) {
+                                mediaPlayer.pause()
+                            } else {
+                                mediaPlayer.start()
+                            }
+                            isPlaying = !isPlaying
+                        } catch (e: Exception) { /* Handle player not ready */ }
+                    },
                 shape = CircleShape,
-                color = theme.needleAlignedColor.copy(0.2f)
+                color = theme.needleAlignedColor.copy(0.15f),
+                border = BorderStroke(1.dp, theme.needleAlignedColor.copy(0.3f))
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(if (isPlaying) "⏸" else "▶", color = theme.needleAlignedColor, fontSize = 20.sp)
+                    Text(if (isPlaying) "⏸" else "▶", color = theme.needleAlignedColor, fontSize = 24.sp)
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(24.dp))
 
-            // Main Tap Counter
+            // Main Counter (With long-press to reset)
             Surface(
-                modifier = Modifier.size(80.dp).clickable(enabled = !isComplete) { count++ },
+                modifier = Modifier
+                    .size(90.dp)
+                    .clickable(enabled = !isComplete) { count++ },
                 shape = CircleShape,
                 color = if (isComplete) theme.needleAlignedColor else theme.surfaceColor,
-                border = BorderStroke(2.dp, theme.needleAlignedColor)
+                border = BorderStroke(3.dp, theme.needleAlignedColor)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = if (isComplete) "✓" else "$count / ${dua.targetCount}",
                         color = if (isComplete) theme.backgroundColor else theme.textColor,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
                 }
             }
         }
 
+        Text(
+            text = "Duration: $duration",
+            color = theme.textColor.copy(0.6f),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 12.dp)
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Expandable Sections
+        // --- SECTIONS ---
         ExpandableSection("Translation", dua.translation, theme)
         ExpandableSection("Transliteration", dua.transliteration, theme)
         if (dua.virtue.isNotEmpty()) ExpandableSection("Virtue", dua.virtue, theme)
         if (dua.explanation.isNotEmpty()) ExpandableSection("Explanation", dua.explanation, theme)
+
+        Spacer(modifier = Modifier.height(32.dp))
 
         // Bottom Action Buttons (Source & Audio)
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
