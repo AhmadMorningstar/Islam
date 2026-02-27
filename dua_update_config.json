@@ -1,1 +1,6 @@
-
+{
+  "min_version": 8,
+  "latest_version": 9,
+  "force_after": "2026-01-10 12:00 PM Asia/Baghdad",
+  "message": "Please Download Update for Duas update"
+}
