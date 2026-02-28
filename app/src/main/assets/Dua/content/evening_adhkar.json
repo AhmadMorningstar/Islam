@@ -1,1 +1,26 @@
 
+[
+  {
+    "id": "e_1",
+    "title": {
+      "en": "Evening Dua 1",
+      "ku": "دوای ئێوارە ١"
+    },
+    "ar": "أَعُوْذُ بِاللّٰهِ مِنَ الشَّيْطَانِ الرَّجِيْمِ. اَللّٰهُ لَآ إِلٰهَ إِلَّا هُوَ الْحَىُّ الْقَيُّوْمُ...",
+    "trans": {
+      "en": "I seek refuge in Allah from the accursed Shaytan. Allah, there is no god except Him, the Ever-Living, the Sustainer of existence...",
+      "ku": "پەنا دەگرم بە خوا لە شەیتانی ڕەجم کراو. خوایەک نیە جگە لەو، زیندووی بەردەوام و ڕاگر..."
+    },
+    "lat": {
+      "en": "A'udhu billahi minash shaytanir rajim. Allahu la ilaha illa huwal hayyul qayyum...",
+      "ku": "Eûzû billahî mineş şeytanir racîm. Ellahû la ilahe illa huvel hayyûl qeyyûm..."
+    },
+    "virt": {
+      "en": "Whoever says this in the evening will be protected until the morning",
+      "ku": "هەرکەسێک ئەمە بڵێت لە ئێواران دەپارێزرێت هەتا بەیانی"
+    },
+    "cnt": 1,
+    "url": "https://sunnah.com/hisn:73",
+    "aud": "evening_1.mp3"
+  }
+]
