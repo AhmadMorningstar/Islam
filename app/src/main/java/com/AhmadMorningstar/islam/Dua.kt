@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
 
@@ -75,8 +76,41 @@ fun DuaUI(theme: CompassTheme) {
     var categoryDuas by remember { mutableStateOf<List<DuaItem>>(emptyList()) }
     val userLang = prefs.getSavedLanguage();
 
+
+    fun debugFileStructure(context: Context) {
+        val duaDir = File(context.filesDir, "Dua")
+        println("Dua dir exists: ${duaDir.exists()}")
+
+        if (duaDir.exists()) {
+            duaDir.listFiles()?.forEach { file ->
+                println("Root file: ${file.name}, isDir: ${file.isDirectory}, size: ${if (file.isFile) file.length() else 0}")
+            }
+        }
+
+        val contentDir = File(duaDir, "content")
+        println("Content dir exists: ${contentDir.exists()}")
+
+        if (contentDir.exists()) {
+            contentDir.listFiles()?.forEach { file ->
+                println("Content file: ${file.name}, size: ${file.length()}")
+                if (file.length() > 0) {
+                    try {
+                        val preview = file.readText().take(200) + "..."
+                        println("Preview: $preview")
+                    } catch (e: Exception) {
+                        println("Could not read file: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
+
     // Hardcoded categories for now (can be moved to JSON later)
     val categories = remember(userLang, refreshTrigger) {
+        // DEBUG: Check what files exist when loading
+        debugFileStructure(context)
+
         listOf(DuaCategory("fav", "Favorited ❤️", true)) + loadCategories(context, userLang)
     }
 
@@ -84,23 +118,45 @@ fun DuaUI(theme: CompassTheme) {
         mutableStateOf(!File(context.filesDir, "Dua/downloaded.lock").exists())
     }
 
+
     if (showDownloadDialog) {
         AlertDialog(
             onDismissRequest = { showDownloadDialog = false },
             confirmButton = {
                 Button(onClick = {
                     coroutineScope.launch(Dispatchers.IO) {
-                        DuaDownloader.downloadContent(context, categories)
-                        File(context.filesDir, "Dua/downloaded.lock").createNewFile()
-                        refreshTrigger++ // This forces the UI to reload the new JSON files
-                        showDownloadDialog = false
+                        // Download the content
+                        val success = DuaDownloader.downloadContent(context, categories)
+
+                        // DEBUG: Check what was downloaded
+                        debugFileStructure(context)
+
+                        // Force refresh on main thread
+                        withContext(Dispatchers.Main) {
+                            if (success) {
+                                refreshTrigger++
+                                showDownloadDialog = false
+                            } else {
+                                println("Download failed - keeping original content")
+                                showDownloadDialog = false
+                            }
+                        }
                     }
                 }) { Text("Download") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    File(context.filesDir, "Dua/downloaded.lock").createNewFile()
+                    showDownloadDialog = false
+                }) {
+                    Text("Skip")
+                }
             },
             title = { Text("Update Content") },
             text = { Text("Would you like to download the latest Supplications and Adhkar?") }
         )
     }
+
 
     // Back button handling
     BackHandler(enabled = currentScreenState != DuaScreenState.CATEGORIES) {
@@ -127,8 +183,20 @@ fun DuaUI(theme: CompassTheme) {
                     items(categories) { category ->
                         CategoryCard(category, theme) {
                             selectedCategory = category
+
+                            // DEBUG: Check specific file before loading
+                            val specificFile = File(context.filesDir, "Dua/content/${category.id}.json")
+                            println("Loading category ${category.id}, file exists: ${specificFile.exists()}, size: ${specificFile.length()}")
+                            if (specificFile.exists()) {
+                                try {
+                                    val preview = specificFile.readText().take(200)
+                                    println("File preview: $preview")
+                                } catch (e: Exception) {
+                                    println("Error reading file: ${e.message}")
+                                }
+                            }
+
                             categoryDuas = if (category.id == "fav") {
-                                // Logic: Load all JSONs and filter by Favorite IDs
                                 loadAllFavorites(context, prefs.getFavorites(), userLang)
                             } else {
                                 loadDuasFromJson(context, category.id, userLang)
@@ -196,9 +264,19 @@ fun DuaUI(theme: CompassTheme) {
 
 // Helper to load only favorited Duas
 fun loadAllFavorites(context: Context, favoriteIds: Set<String>, lang: String): List<DuaItem> {
-    val allCategories = listOf("morning_adhkar", "evening_adhkar", "before_sleep", "salah")
-    return allCategories.flatMap { loadDuasFromJson(context, it, lang) }
-        .filter { favoriteIds.contains(it.id) }
+    val allCategories = listOf("morning_adhkar", "evening_adhkar")
+    val allDuas = mutableListOf<DuaItem>()
+
+    allCategories.forEach { categoryId ->
+        try {
+            val duas = loadDuasFromJson(context, categoryId, lang)
+            allDuas.addAll(duas)
+        } catch (e: Exception) {
+            println("Could not load $categoryId for favorites: ${e.message}")
+        }
+    }
+
+    return allDuas.filter { favoriteIds.contains(it.id) }
 }
 
 @Composable
@@ -254,49 +332,31 @@ fun FlashcardView(
     category: DuaCategory?,
     onSourceClick: () -> Unit
 ) {
-    var count by remember(dua.id) { mutableStateOf(0) }
+    var count by remember { mutableStateOf(0) }
     val isComplete = count >= dua.targetCount
+
     val context = LocalContext.current
     val mediaPlayer = remember { android.media.MediaPlayer() }
     var isPlaying by remember { mutableStateOf(false) }
     var duration by remember { mutableStateOf("0:00") }
 
-    val audioUrl = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/main/app/src/main/assets/Dua/content/audio/\${category?.id}/\${dua.audioUrl}"
+    val audioUrl = "https://github.com/AhmadMorningstar/Islam/raw/refs/heads/main/app/src/main/assets/Dua/content/audio/${category?.id}/${dua.audioUrl}"
 
 
     LaunchedEffect(dua.id) {
-        isPlaying = false
-        duration = "..."
         try {
             mediaPlayer.reset()
             mediaPlayer.setDataSource(audioUrl)
-
-            // We use a listener because network calls take time
+            mediaPlayer.prepareAsync()
             mediaPlayer.setOnPreparedListener { mp ->
-                val totalSeconds = mp.duration / 1000
-                duration = String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60)
+                val seconds = mp.duration / 1000
+                duration = String.format("%d:%02d", seconds / 60, seconds % 60)
             }
-
-            mediaPlayer.setOnCompletionListener {
-                isPlaying = false
-            }
-
-            mediaPlayer.prepareAsync() // Don't block the UI thread
-        } catch (e: Exception) {
-            duration = "Error"
-        }
+            mediaPlayer.setOnCompletionListener { isPlaying = false }
+        } catch (e: Exception) { duration = "Error" }
     }
 
-    // Stop audio if user leaves or swipes
-    DisposableEffect(dua.id) {
-        onDispose {
-            if (mediaPlayer.isPlaying) {
-                mediaPlayer.stop()
-            }
-        }
-    }
-
-    // Full cleanup
+    // Clean up player when leaving screen
     DisposableEffect(Unit) {
         onDispose {
             mediaPlayer.release()
@@ -395,6 +455,7 @@ fun FlashcardView(
             ) {
                 Text("Audio ($duration)", color = theme.needleAlignedColor)
             }
+
         }
     }
 }
@@ -444,53 +505,153 @@ fun loadCategories(context: Context, lang: String): List<DuaCategory> {
             context.assets.open("Dua/categories.json").bufferedReader().use { it.readText() }
         }
 
+        println("=== CATEGORIES JSON CONTENT ===")
+        println(jsonString)
+        println("================================")
+
         val array = JSONArray(jsonString)
-        List(array.length()) { i ->
+        val categories = List(array.length()) { i ->
             val obj = array.getJSONObject(i)
             DuaCategory(
                 id = obj.getString("id"),
                 title = if (obj.has(lang)) obj.getString(lang) else obj.getString("en")
             )
         }
-    } catch (e: Exception) { emptyList() }
+
+        println("Loaded categories: ${categories.joinToString { "${it.id} - ${it.title}" }}")
+        categories
+    } catch (e: Exception) {
+        println("Error loading categories: ${e.message}")
+        emptyList()
+    }
 }
 
 object DuaDownloader {
-    // Updated to your specific raw path
-    private const val BASE_URL = "https://github.com/AhmadMorningstar/Islam/raw/refs/heads/main/app/src/main/assets/Dua"
+    private const val BASE_URL = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/refs/heads/main/app/src/main/assets/Dua"
 
-    suspend fun downloadContent(context: Context, categories: List<DuaCategory>) {
-        val catFile = File(context.filesDir, "Dua/categories.json")
-        catFile.parentFile?.mkdirs()
-        downloadFile("$BASE_URL/categories.json", catFile)
+    suspend fun downloadContent(context: Context, categories: List<DuaCategory>): Boolean {
+        var allSuccessful = true
+        var anySuccessful = false
 
-        categories.filter { !it.isFavoriteFolder }.forEach { cat ->
-            val targetFile = File(context.filesDir, "Dua/content/${cat.id}.json")
-            targetFile.parentFile?.mkdirs()
-            downloadFile("$BASE_URL/content/${cat.id}.json", targetFile)
+        try {
+            val duaDir = File(context.filesDir, "Dua")
+            val contentDir = File(duaDir, "content")
+            contentDir.mkdirs()
+
+            // Download categories.json
+            val catFile = File(duaDir, "categories.json")
+            val catSuccess = downloadFile("$BASE_URL/categories.json", catFile)
+
+            if (!catSuccess) {
+                println("Failed to download categories.json")
+                return false
+            }
+
+            // Parse categories
+            val realCategories = try {
+                val jsonString = catFile.readText()
+                val array = JSONArray(jsonString)
+                List(array.length()) { i ->
+                    val obj = array.getJSONObject(i)
+                    obj.getString("id")
+                }
+            } catch (e: Exception) {
+                println("Error parsing categories.json: ${e.message}")
+                categories.filter { !it.isFavoriteFolder }.map { it.id }
+            }
+
+            // Download each category's JSON file
+            realCategories.forEach { categoryId ->
+                val targetFile = File(contentDir, "$categoryId.json")
+                val url = "$BASE_URL/content/$categoryId.json"
+
+                println("Attempting to download: $url")
+
+                val success = downloadFile(url, targetFile)
+                if (success) {
+                    anySuccessful = true
+                    if (targetFile.length() > 0) {
+                        try {
+                            val array = JSONArray(targetFile.readText())
+                            println("✅ Successfully downloaded $categoryId.json with ${array.length()} items")
+                        } catch (e: Exception) {
+                            println("⚠️ $categoryId.json is invalid JSON, deleting...")
+                            targetFile.delete()
+                            allSuccessful = false
+                        }
+                    } else {
+                        println("⚠️ $categoryId.json is empty, deleting...")
+                        targetFile.delete()
+                        allSuccessful = false
+                    }
+                } else {
+                    println("⚠️ Failed to download $categoryId.json (might not exist yet)")
+                    // Don't mark allSuccessful as false for missing files
+                    // Just continue with what we have
+                }
+            }
+
+            // Create lock file if at least one file was downloaded successfully
+            if (anySuccessful) {
+                File(duaDir, "downloaded.lock").createNewFile()
+                println("✅ Download completed with some files (lock file created)")
+            } else {
+                println("❌ No files were downloaded successfully")
+                return false
+            }
+
+            return true
+        } catch (e: Exception) {
+            println("Download error: ${e.message}")
+            e.printStackTrace()
+            return false
         }
     }
 
-    private fun downloadFile(url: String, target: File) {
-        try {
-            java.net.URL(url).openStream().use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+    private fun downloadFile(url: String, target: File): Boolean {
+        return try {
+            val connection = java.net.URL(url).openConnection()
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+
+            val responseCode = (connection as? java.net.HttpURLConnection)?.responseCode
+            if (responseCode != null && responseCode != 200) {
+                println("HTTP error $responseCode for $url")
+                return false
             }
-        } catch (e: Exception) { e.printStackTrace() }
+
+            connection.getInputStream().use { input ->
+                target.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            target.exists() && target.length() > 0
+        } catch (e: Exception) {
+            println("Download error for $url: ${e.message}")
+            false
+        }
     }
 }
 
 fun loadDuasFromJson(context: Context, categoryId: String, lang: String): List<DuaItem> {
     return try {
         val file = File(context.filesDir, "Dua/content/$categoryId.json")
+        println("Loading duas from: ${file.absolutePath}, exists: ${file.exists()}")
+
         val jsonString = if (file.exists()) {
             file.readText()
         } else {
-            // Ensure this is called correctly
+            println("File not found, falling back to assets")
             context.assets.open("Dua/content/$categoryId.json").bufferedReader().use { it.readText() }
         }
 
+        println("JSON string length: ${jsonString.length}")
+        println("JSON preview: ${jsonString.take(100)}...")
+
         val array = JSONArray(jsonString)
+        println("Array length: ${array.length()}")
+
         val list = mutableListOf<DuaItem>()
 
         for (i in 0 until array.length()) {
@@ -506,12 +667,15 @@ fun loadDuasFromJson(context: Context, categoryId: String, lang: String): List<D
                     explanation = "",
                     targetCount = obj.getInt("cnt"),
                     sourceUrl = obj.getString("url"),
-                    audioUrl = obj.optString("aud", "") // Use optString to avoid crashes if missing
+                    audioUrl = obj.optString("aud", "")
                 )
             )
         }
+        println("Successfully loaded ${list.size} duas for $categoryId")
         list
     } catch (e: Exception) {
+        println("ERROR loading $categoryId: ${e.message}")
+        e.printStackTrace()
         emptyList()
     }
 }

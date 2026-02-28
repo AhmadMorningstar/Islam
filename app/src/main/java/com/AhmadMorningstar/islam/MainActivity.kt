@@ -872,7 +872,7 @@ fun QiblaCompassUI(
     sunAngle: Float?,
     moonAngle: Float?,
 
-) {
+    ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePreferences(context) }
     var hasVibrated by remember { mutableStateOf(false) }
@@ -1338,11 +1338,6 @@ fun LocationRequiredOverlay(
         }
     }
 }
-
-data class DuaMetadata(
-    val latestVersion: Int,
-    val message: String
-)
 
 data class UpdateConfig(
     val min_version: Long,
