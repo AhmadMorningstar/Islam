@@ -6,12 +6,15 @@ Currently, the app features:
 - **Qibla Finder** — Instantly determine the direction of the Kaaba using your device’s location and sensors for maximum accuracy.  
 - **Distance Measurement** — See the distance from your current location to the Kaaba in real-time.  
 - **Visual Compass** — A smooth, easy-to-read compass with alignment indicators.
+- **Prayer times** - added Prayer times now avaialable on the latest version on google play store  
 
 ### Upcoming Features
 We are continuously working on adding more helpful features, including:  
-- Prayer times notifications  
+
 - Hijri calendar integration  
-- Additional Islamic educational resources  
+- Duas and Dhikr
+- Prayer times notification and Adhan sound
+- Prayer times widgets for supported devices
 
 ### Data Safety & Privacy
 Your privacy is our priority. All sensitive data, such as your location and device sensor data, is processed locally on your device and **never shared with third parties**.
