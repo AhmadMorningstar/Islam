@@ -40,6 +40,12 @@ android {
     }
     buildToolsVersion = "36.0.0"
     ndkVersion = "29.0.14206865"
+
+    androidResources {
+        // Corrected: added '=' and used a pattern to target the specific folder
+        ignoreAssetsPattern = "audio"
+    }
+
 }
 
 kotlin {
