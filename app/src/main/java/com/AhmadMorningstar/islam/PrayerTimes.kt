@@ -247,6 +247,7 @@ fun PrayerRow(
             )
         }
 
+
         Text(
             text = formatPrayerTime(prayer.time, LocalContext.current),
             color = if (isNext) theme.needleAlignedColor else theme.textColor,

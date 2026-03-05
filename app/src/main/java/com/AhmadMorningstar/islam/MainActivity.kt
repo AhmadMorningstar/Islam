@@ -314,6 +314,7 @@ class MainActivity : ComponentActivity() {
             sensorAccuracyState.value = accuracy
         }
     }
+    
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

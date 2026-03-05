@@ -188,6 +188,7 @@ fun DuaUI(theme: CompassTheme, lang: String) {
                                         refreshTrigger++
                                     } else {
                                         downloadFailed = true
+
                                     }
                                 }
                             }

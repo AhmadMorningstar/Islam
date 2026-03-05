@@ -175,6 +175,7 @@ class DuaPreferences(context: Context) {
 
     // --- LANGUAGE ---
     // "en" = English, "ku" = Kurdish Sorani — matches your JSON field names
+
     fun getSavedLanguage(): String = sharedPrefs.getString("language", "en") ?: "en"
     fun saveLanguage(lang: String) {
         sharedPrefs.edit().putString("language", lang).apply()

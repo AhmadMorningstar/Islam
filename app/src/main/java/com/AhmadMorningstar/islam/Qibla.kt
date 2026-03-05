@@ -110,6 +110,7 @@ fun QiblaCompassUI(
     location: Pair<Double, Double>?,
     isDeviceFlat: Boolean,
 ) {
+
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val sunAngle = activity?.sunAzimuthState?.value?.toFloat()

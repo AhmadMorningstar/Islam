@@ -153,6 +153,7 @@ fun SettingsUI(
                 }
                 Text("Change", color = theme.needleAlignedColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
+
         }
 
         Spacer(Modifier.height(32.dp))
