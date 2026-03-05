@@ -1,5 +1,7 @@
 package com.AhmadMorningstar.islam
 
+import android.annotation.SuppressLint
+import android.content.Context
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -22,11 +24,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
-import android.content.Context
-import android.text.format.DateFormat
-import java.text.SimpleDateFormat
-import java.util.Locale
-import androidx.compose.ui.res.stringResource
 import java.util.*
 
 // --- DATA MODEL Internal use
@@ -35,13 +32,7 @@ data class PrayerTimeItem(val name: String, val time: String, val icon: Int)
 @Composable
 fun PrayerTimesUI(theme: CompassTheme, region: String) {
     val context = LocalContext.current
-    val prayerNames = listOf("Fajr",
-        "Sunrise",
-        "Dhuhr",
-        "Asr",
-        "Maghrib",
-        "Isha"
-    )
+    val prayerNames = listOf("Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha")
     val prayerIcons = listOf(
         R.drawable.ic_prayer_times, R.drawable.ic_prayer_times,
         R.drawable.ic_prayer_times, R.drawable.ic_prayer_times,
@@ -53,6 +44,7 @@ fun PrayerTimesUI(theme: CompassTheme, region: String) {
     var nextPrayerName by remember { mutableStateOf("Loading...") }
     var nextPrayerIndex by remember { mutableStateOf(-1) }
     var countdownText by remember { mutableStateOf("00:00:00") }
+
 
     // This reloads the file whenever the 'region' changes in Settings
     LaunchedEffect(region) {
@@ -66,29 +58,24 @@ fun PrayerTimesUI(theme: CompassTheme, region: String) {
     }
 
     LaunchedEffect(allDaysJson) {
+        val data = allDaysJson ?: return@LaunchedEffect
+
+        // Part A: Load today's schedule ONCE when data arrives — it's static for the day
+        val now = Calendar.getInstance()
+        val todayObj = findEntryForDate(data, now.get(Calendar.DAY_OF_MONTH), now.get(Calendar.MONTH) + 1)
+        todayObj?.let {
+            val timesArray = it.getJSONArray("time")
+            val items = mutableListOf<PrayerTimeItem>()
+            for (j in 0 until timesArray.length()) {
+                items.add(PrayerTimeItem(prayerNames[j], timesArray.getString(j), prayerIcons[j]))
+            }
+            todayPrayers = items
+        }
+
+        // Part B: Countdown loop — only updates the clock, does not reparse JSON
         while (true) {
-            val data = allDaysJson
-            if (data == null) {
-                kotlinx.coroutines.delay(1000)
-                continue
-            }
+            val current = Calendar.getInstance()
 
-            val now = Calendar.getInstance()
-            val currentDay = now.get(Calendar.DAY_OF_MONTH)
-            val currentMonth = now.get(Calendar.MONTH) + 1
-
-            // Part A: Update Schedule
-            val todayObj = findEntryForDate(data, currentDay, currentMonth)
-            todayObj?.let {
-                val timesArray = it.getJSONArray("time")
-                val items = mutableListOf<PrayerTimeItem>()
-                for (j in 0 until timesArray.length()) {
-                    items.add(PrayerTimeItem(prayerNames[j], timesArray.getString(j), prayerIcons[j]))
-                }
-                todayPrayers = items
-            }
-
-            // Part B: Find Next Prayer
             var targetTime: Calendar? = null
             var foundName = ""
             var foundIdx = -1
@@ -101,7 +88,7 @@ fun PrayerTimesUI(theme: CompassTheme, region: String) {
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }
-                if (pCal.after(now) && targetTime == null) {
+                if (pCal.after(current) && targetTime == null) {
                     targetTime = pCal
                     foundName = prayer.name
                     foundIdx = index
@@ -127,9 +114,8 @@ fun PrayerTimesUI(theme: CompassTheme, region: String) {
                 }
             }
 
-            // Part C: Update UI
             targetTime?.let {
-                val diff = it.timeInMillis - now.timeInMillis
+                val diff = it.timeInMillis - current.timeInMillis
                 countdownText = formatMillis(diff)
                 nextPrayerName = foundName
                 nextPrayerIndex = foundIdx
@@ -150,11 +136,11 @@ fun PrayerTimesUI(theme: CompassTheme, region: String) {
         CountdownCard(nextName = nextPrayerName, countdown = countdownText, theme = theme)
         Spacer(Modifier.height(32.dp))
         Text(
-            text = stringResource(id = R.string.todays_schedule_label),
+            text = "TODAY'S SCHEDULE",
             color = theme.needleAlignedColor,
-            style = LocalAppTypography.current.qiblaScreen.copy(
-                letterSpacing = 2.sp
-            ),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
             modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
         )
 
@@ -197,11 +183,11 @@ fun CountdownCard(nextName: String, countdown: String, theme: CompassTheme) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = stringResource(id = R.string.up_next_label, nextName),
+                text = "UP NEXT: $nextName",
                 color = theme.textColor.copy(0.6f),
-                style = LocalAppTypography.current.qiblaScreen.copy(
-                    letterSpacing = 1.5.sp
-                )
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp
             )
 
             Spacer(Modifier.height(12.dp))
@@ -217,10 +203,10 @@ fun CountdownCard(nextName: String, countdown: String, theme: CompassTheme) {
             }
 
             Text(
-                text = stringResource(id = R.string.remaining_label),
+                text = "REMAINING",
                 color = theme.needleAlignedColor,
-                style = LocalAppTypography.current.qiblaScreen
-
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black
             )
         }
     }
@@ -236,12 +222,6 @@ fun PrayerRow(
     val rowBg by animateColorAsState(
         if (isNext) theme.needleAlignedColor.copy(0.1f) else Color.Transparent, label = ""
     )
-
-    // NEW: Get the context and format the time for display
-    val context = LocalContext.current
-    val displayTime = remember(prayer.time) {
-        formatTimeForDevice(context, prayer.time)
-    }
 
     Row(
         modifier = Modifier
@@ -268,7 +248,7 @@ fun PrayerRow(
         }
 
         Text(
-            text = displayTime,
+            text = formatPrayerTime(prayer.time, LocalContext.current),
             color = if (isNext) theme.needleAlignedColor else theme.textColor,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold
@@ -293,6 +273,7 @@ private fun findEntryForDate(data: JSONArray, day: Int, month: Int): JSONObject?
     return null
 }
 
+@SuppressLint("DefaultLocale")
 private fun formatMillis(millis: Long): String {
     val totalSeconds = (millis / 1000).coerceAtLeast(0)
     val hours = totalSeconds / 3600
@@ -301,17 +282,26 @@ private fun formatMillis(millis: Long): String {
     return String.format("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-private fun formatTimeForDevice(context: Context, rawTime: String): String {
-    val is24Hour = DateFormat.is24HourFormat(context)
-    if (is24Hour) return rawTime // JSON is already 24h, so return as-is
-
+private fun formatPrayerTime(rawTime: String, context: Context): String {
     return try {
-        // Parse the 24h string and format it to 12h with AM/PM
-        val sdf24 = SimpleDateFormat("H:mm", Locale.getDefault())
-        val sdf12 = SimpleDateFormat("h:mm a", Locale.getDefault())
-        val date = sdf24.parse(rawTime)
-        if (date != null) sdf12.format(date) else rawTime
+        val parts = rawTime.split(":")
+        val hour = parts[0].toInt()
+        val minute = parts[1].toInt()
+
+        if (android.text.format.DateFormat.is24HourFormat(context)) {
+            // Device is 24h — show as-is
+            String.format("%02d:%02d", hour, minute)
+        } else {
+            // Device is 12h — convert with AM/PM
+            val amPm = if (hour < 12) "AM" else "PM"
+            val hour12 = when (hour) {
+                0 -> 12
+                in 13..23 -> hour - 12
+                else -> hour
+            }
+            String.format("%d:%02d %s", hour12, minute, amPm)
+        }
     } catch (e: Exception) {
-        rawTime
+        rawTime // fallback — show raw if parsing fails
     }
 }

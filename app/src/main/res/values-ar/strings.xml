@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_text">اسلام</string>
+    <string name="app_name">اسلام</string>
     <string name="settings_label">الإعدادات</string>
     <string name="language_english_label">الإنجليزية</string>
     <string name="language_kurdish_label">الكردية</string>

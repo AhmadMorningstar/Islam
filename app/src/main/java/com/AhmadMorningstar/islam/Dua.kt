@@ -1,28 +1,27 @@
 package com.AhmadMorningstar.islam
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
+import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -30,19 +29,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
-// --- DATA MODELS ---
+// ---------------------------------------------------------------------------
+// DATA MODELS
+// ---------------------------------------------------------------------------
+
 data class DuaCategory(
     val id: String,
     val title: String,
+    val duaCount: Int = 0,
     val isFavoriteFolder: Boolean = false
 )
 
@@ -53,123 +56,189 @@ data class DuaItem(
     val translation: String,
     val transliteration: String,
     val virtue: String,
-    val explanation: String,
     val targetCount: Int,
     val sourceUrl: String,
-    val audioUrl: String
+    val audioFileName: String
 )
 
-// --- STATE ENUM ---
 enum class DuaScreenState { CATEGORIES, DUA_LIST, FLASHCARD }
-@OptIn(ExperimentalFoundationApi::class)
+
+// ---------------------------------------------------------------------------
+// MAIN DUA UI
+// ---------------------------------------------------------------------------
+
 @Composable
-fun DuaUI(theme: CompassTheme) {
-    var refreshTrigger by remember { mutableStateOf(0) }
+fun DuaUI(theme: CompassTheme, lang: String) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
-    val prefs = remember { ThemePreferences(context) }
+    val duaPrefs = remember { DuaPreferences(context) }
     val coroutineScope = rememberCoroutineScope()
-    // Navigation State
-    var currentScreenState by remember { mutableStateOf(DuaScreenState.CATEGORIES) }
+    // Navigation state
+    var screenState by remember { mutableStateOf(DuaScreenState.CATEGORIES) }
     var selectedCategory by remember { mutableStateOf<DuaCategory?>(null) }
     var selectedDuaIndex by remember { mutableStateOf(0) }
     var categoryDuas by remember { mutableStateOf<List<DuaItem>>(emptyList()) }
-    val userLang = prefs.getSavedLanguage();
 
+    // Categories — reloads whenever refreshTrigger increments
+    var refreshTrigger by remember { mutableStateOf(0) }
+    var categories by remember { mutableStateOf<List<DuaCategory>>(emptyList()) }
 
-    fun debugFileStructure(context: Context) {
-        val duaDir = File(context.filesDir, "Dua")
-        println("Dua dir exists: ${duaDir.exists()}")
+    // Update dialog state
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var categoriesToUpdate by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0 to 0) }
+    var downloadFailed by remember { mutableStateOf(false) }
 
-        if (duaDir.exists()) {
-            duaDir.listFiles()?.forEach { file ->
-                println("Root file: ${file.name}, isDir: ${file.isDirectory}, size: ${if (file.isFile) file.length() else 0}")
-            }
-        }
-
-        val contentDir = File(duaDir, "content")
-        println("Content dir exists: ${contentDir.exists()}")
-
-        if (contentDir.exists()) {
-            contentDir.listFiles()?.forEach { file ->
-                println("Content file: ${file.name}, size: ${file.length()}")
-                if (file.length() > 0) {
-                    try {
-                        val preview = file.readText().take(200) + "..."
-                        println("Preview: $preview")
-                    } catch (e: Exception) {
-                        println("Could not read file: ${e.message}")
-                    }
-                }
-            }
+    // Load categories on first launch and on refresh
+    LaunchedEffect(refreshTrigger) {
+        categories = withContext(Dispatchers.IO) {
+            val rawCats = DuaContentManager.loadCategories(context, lang)
+            val favCount = duaPrefs.getFavorites().size
+            listOf(DuaCategory("fav", "Favorites ❤️", favCount, true)) + rawCats
         }
     }
 
-
-    // Hardcoded categories for now (can be moved to JSON later)
-    val categories = remember(userLang, refreshTrigger) {
-        // DEBUG: Check what files exist when loading
-        debugFileStructure(context)
-
-        listOf(DuaCategory("fav", "Favorited ❤️", true)) + loadCategories(context, userLang)
+    // Check GitHub for content updates on every app launch
+    LaunchedEffect(Unit) {
+        val updates = withContext(Dispatchers.IO) {
+            DuaContentManager.checkForUpdates(context)
+        }
+        if (updates.isNotEmpty()) {
+            categoriesToUpdate = updates
+            showUpdateDialog = true
+        }
     }
 
-    var showDownloadDialog by remember {
-        mutableStateOf(!File(context.filesDir, "Dua/downloaded.lock").exists())
-    }
+    // ---------------------------------------------------------------------------
+    // DOWNLOAD DIALOG
+    // ---------------------------------------------------------------------------
 
-
-    if (showDownloadDialog) {
+    if (showUpdateDialog) {
         AlertDialog(
-            onDismissRequest = { showDownloadDialog = false },
-            confirmButton = {
-                Button(onClick = {
-                    coroutineScope.launch(Dispatchers.IO) {
-                        // Download the content
-                        val success = DuaDownloader.downloadContent(context, categories)
-
-                        // DEBUG: Check what was downloaded
-                        debugFileStructure(context)
-
-                        // Force refresh on main thread
-                        withContext(Dispatchers.Main) {
-                            if (success) {
-                                refreshTrigger++
-                                showDownloadDialog = false
-                            } else {
-                                println("Download failed - keeping original content")
-                                showDownloadDialog = false
-                            }
+            onDismissRequest = { if (!isDownloading) showUpdateDialog = false },
+            containerColor = theme.backgroundColor,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    text = "New Content Available",
+                    color = theme.textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                when {
+                    isDownloading -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Downloading ${downloadProgress.first} of ${downloadProgress.second} files...",
+                                color = theme.textColor.copy(0.7f),
+                                fontSize = 14.sp
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            LinearProgressIndicator(
+                                progress = {
+                                    if (downloadProgress.second > 0)
+                                        downloadProgress.first.toFloat() / downloadProgress.second
+                                    else 0f
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = theme.needleAlignedColor,
+                                trackColor = theme.textColor.copy(0.1f)
+                            )
                         }
                     }
-                }) { Text("Download") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    File(context.filesDir, "Dua/downloaded.lock").createNewFile()
-                    showDownloadDialog = false
-                }) {
-                    Text("Skip")
+                    downloadFailed -> {
+                        Text(
+                            text = "Download failed. Please check your connection and try again.",
+                            color = theme.maliciousColor.copy(0.85f),
+                            fontSize = 14.sp
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = "Updated Supplications & Adhkar are available, including new duas and audio files.",
+                            color = theme.textColor.copy(0.65f),
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             },
-            title = { Text("Update Content") },
-            text = { Text("Would you like to download the latest Supplications and Adhkar?") }
+            confirmButton = {
+                if (!isDownloading) {
+                    Button(
+                        onClick = {
+                            isDownloading = true
+                            downloadFailed = false
+                            downloadProgress = 0 to 0
+                            coroutineScope.launch(Dispatchers.IO) {
+                                val success = DuaContentManager.downloadAll(
+                                    context = context,
+                                    categoriesToUpdate = categoriesToUpdate,
+                                    onProgress = { done, total ->
+                                        coroutineScope.launch(Dispatchers.Main) {
+                                            downloadProgress = done to total
+                                        }
+                                    }
+                                )
+                                withContext(Dispatchers.Main) {
+                                    isDownloading = false
+                                    if (success) {
+                                        showUpdateDialog = false
+                                        refreshTrigger++
+                                    } else {
+                                        downloadFailed = true
+                                    }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = theme.needleAlignedColor),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (downloadFailed) "Retry" else "Download",
+                            color = if (theme.isDark) theme.backgroundColor else Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isDownloading) {
+                    TextButton(onClick = { showUpdateDialog = false }) {
+                        Text("Later", color = theme.textColor.copy(0.45f))
+                    }
+                }
+            }
         )
     }
 
+    // ---------------------------------------------------------------------------
+    // BACK HANDLING
+    // ---------------------------------------------------------------------------
 
-    // Back button handling
-    BackHandler(enabled = currentScreenState != DuaScreenState.CATEGORIES) {
-        currentScreenState = if (currentScreenState == DuaScreenState.FLASHCARD) DuaScreenState.DUA_LIST else DuaScreenState.CATEGORIES
+    BackHandler(enabled = screenState != DuaScreenState.CATEGORIES) {
+        screenState = when (screenState) {
+            DuaScreenState.FLASHCARD -> DuaScreenState.DUA_LIST
+            else -> DuaScreenState.CATEGORIES
+        }
     }
+
+    // ---------------------------------------------------------------------------
+    // SCREEN NAVIGATION
+    // ---------------------------------------------------------------------------
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(theme.backgroundColor)
-            .padding(top = 40.dp, bottom = 80.dp) // Leave room for bottom nav
+            .padding(top = 40.dp, bottom = 80.dp)
     ) {
-        when (currentScreenState) {
+        when (screenState) {
+
+            // ----------------------------------------------------------------
+            // SCREEN 1: CATEGORY LIST
+            // ----------------------------------------------------------------
             DuaScreenState.CATEGORIES -> {
                 Text(
                     text = "Supplications",
@@ -178,42 +247,45 @@ fun DuaUI(theme: CompassTheme) {
                     color = theme.textColor,
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
                 )
-
                 LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
-                    items(categories) { category ->
-                        CategoryCard(category, theme) {
+                    itemsIndexed(categories) { _, category ->
+                        CategoryCard(category = category, theme = theme) {
                             selectedCategory = category
-
-                            // DEBUG: Check specific file before loading
-                            val specificFile = File(context.filesDir, "Dua/content/${category.id}.json")
-                            println("Loading category ${category.id}, file exists: ${specificFile.exists()}, size: ${specificFile.length()}")
-                            if (specificFile.exists()) {
-                                try {
-                                    val preview = specificFile.readText().take(200)
-                                    println("File preview: $preview")
-                                } catch (e: Exception) {
-                                    println("Error reading file: ${e.message}")
+                            coroutineScope.launch {
+                                categoryDuas = withContext(Dispatchers.IO) {
+                                    if (category.isFavoriteFolder) {
+                                        DuaContentManager.loadFavorites(
+                                            context, duaPrefs.getFavorites(), lang
+                                        )
+                                    } else {
+                                        DuaContentManager.loadDuas(context, category.id, lang)
+                                    }
                                 }
+                                screenState = DuaScreenState.DUA_LIST
                             }
-
-                            categoryDuas = if (category.id == "fav") {
-                                loadAllFavorites(context, prefs.getFavorites(), userLang)
-                            } else {
-                                loadDuasFromJson(context, category.id, userLang)
-                            }
-                            currentScreenState = DuaScreenState.DUA_LIST
                         }
+                        Spacer(Modifier.height(4.dp))
                     }
                 }
             }
 
+            // ----------------------------------------------------------------
+            // SCREEN 2: DUA TITLE LIST
+            // ----------------------------------------------------------------
             DuaScreenState.DUA_LIST -> {
                 Row(
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 20.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { currentScreenState = DuaScreenState.CATEGORIES }) {
-                        Text("X", color = theme.textColor, fontSize = 24.sp)
+                    IconButton(onClick = { screenState = DuaScreenState.CATEGORIES }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = theme.textColor,
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
                     Text(
                         text = selectedCategory?.title ?: "",
@@ -223,38 +295,91 @@ fun DuaUI(theme: CompassTheme) {
                     )
                 }
 
-                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp)) {
-                    items(categoryDuas.indices.toList()) { index ->
-                        DuaTitleCard(categoryDuas[index], theme) {
-                            selectedDuaIndex = index
-                            currentScreenState = DuaScreenState.FLASHCARD
+                if (categoryDuas.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "No supplications found",
+                            color = theme.textColor.copy(0.4f),
+                            fontSize = 16.sp
+                        )
+                    }
+                } else {
+                    LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp)) {
+                        itemsIndexed(categoryDuas) { index, dua ->
+                            DuaTitleCard(dua = dua, index = index, theme = theme) {
+                                selectedDuaIndex = index
+                                screenState = DuaScreenState.FLASHCARD
+                            }
+                            Spacer(Modifier.height(4.dp))
                         }
                     }
                 }
             }
 
+            // ----------------------------------------------------------------
+            // SCREEN 3: FLASHCARD PAGER
+            // ----------------------------------------------------------------
             DuaScreenState.FLASHCARD -> {
-                val pagerState = rememberPagerState(initialPage = selectedDuaIndex, pageCount = { categoryDuas.size })
+                if (categoryDuas.isEmpty()) {
+                    screenState = DuaScreenState.DUA_LIST
+                    return@Column
+                }
+
+                val pagerState = rememberPagerState(
+                    initialPage = selectedDuaIndex,
+                    pageCount = { categoryDuas.size }
+                )
+
                 val currentDua = categoryDuas[pagerState.currentPage]
+                var isFav by remember(currentDua.id) {
+                    mutableStateOf(duaPrefs.isFavorite(currentDua.id))
+                }
 
-                // Top Bar with Favorite Toggle
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    IconButton(onClick = { currentScreenState = DuaScreenState.DUA_LIST }) { Text("✕", color = theme.textColor) }
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { screenState = DuaScreenState.DUA_LIST }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = theme.textColor,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
 
-                    var isFav by remember(currentDua.id) { mutableStateOf(prefs.isFavorite(currentDua.id)) }
+                    Text(
+                        text = "${pagerState.currentPage + 1} / ${categoryDuas.size}",
+                        color = theme.textColor.copy(0.45f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
                     IconButton(onClick = {
-                        prefs.toggleFavorite(currentDua.id)
-                        isFav = prefs.isFavorite(currentDua.id)
+                        duaPrefs.toggleFavorite(currentDua.id)
+                        isFav = duaPrefs.isFavorite(currentDua.id)
+                        refreshTrigger++ // update fav count on category card
                     }) {
-                        Text(if (isFav) "❤️" else "♡", color = theme.textColor, fontSize = 24.sp)
+                        Text(
+                            text = if (isFav) "❤️" else "🤍",
+                            fontSize = 22.sp
+                        )
                     }
                 }
 
-                HorizontalPager(state = pagerState) { page ->
-                    FlashcardView(dua = categoryDuas[page],
-                        theme = theme,
-                        category = selectedCategory,
-                        onSourceClick = { uriHandler.openUri(categoryDuas[page].sourceUrl) }
+                // Swipeable pager — each page is independently scrollable vertically
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    FlashcardView(
+                        dua = categoryDuas[page],
+                        categoryId = selectedCategory?.id ?: "",
+                        theme = theme
                     )
                 }
             }
@@ -262,107 +387,181 @@ fun DuaUI(theme: CompassTheme) {
     }
 }
 
-// Helper to load only favorited Duas
-fun loadAllFavorites(context: Context, favoriteIds: Set<String>, lang: String): List<DuaItem> {
-    val allCategories = listOf("morning_adhkar", "evening_adhkar")
-    val allDuas = mutableListOf<DuaItem>()
-
-    allCategories.forEach { categoryId ->
-        try {
-            val duas = loadDuasFromJson(context, categoryId, lang)
-            allDuas.addAll(duas)
-        } catch (e: Exception) {
-            println("Could not load $categoryId for favorites: ${e.message}")
-        }
-    }
-
-    return allDuas.filter { favoriteIds.contains(it.id) }
-}
+// ---------------------------------------------------------------------------
+// CATEGORY CARD  — title on left, count badge on right
+// ---------------------------------------------------------------------------
 
 @Composable
 fun CategoryCard(category: DuaCategory, theme: CompassTheme, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 6.dp)
             .clickable { onClick() },
         color = theme.surfaceColor,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, if (category.isFavoriteFolder) theme.needleAlignedColor else theme.textColor.copy(0.1f))
+        border = BorderStroke(
+            1.dp,
+            if (category.isFavoriteFolder) theme.needleAlignedColor.copy(0.4f)
+            else theme.textColor.copy(0.1f)
+        )
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = category.title,
                 color = theme.textColor,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Count badge with accent background
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = theme.needleAlignedColor.copy(0.15f)
+            ) {
+                Text(
+                    text = "${category.duaCount}",
+                    color = theme.needleAlignedColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DUA TITLE CARD  — numbered list item
+// ---------------------------------------------------------------------------
+
+@Composable
+fun DuaTitleCard(dua: DuaItem, index: Int, theme: CompassTheme, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        color = theme.textColor.copy(0.03f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, theme.textColor.copy(0.06f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Number badge
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = theme.needleAlignedColor.copy(0.12f),
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "${index + 1}",
+                        color = theme.needleAlignedColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = dua.title,
+                color = theme.textColor,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
             )
         }
     }
 }
 
-@Composable
-fun DuaTitleCard(dua: DuaItem, theme: CompassTheme, onClick: () -> Unit) {
-    val typography = LocalAppTypography.current
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clickable { onClick() },
-        color = theme.textColor.copy(0.03f),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Text(
-            text = dua.title,
-            modifier = Modifier.padding(16.dp),
-            color = theme.textColor,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
+// ---------------------------------------------------------------------------
+// FLASHCARD VIEW  — scrollable, Arabic + translation always visible
+// ---------------------------------------------------------------------------
 
 @Composable
 fun FlashcardView(
     dua: DuaItem,
-    theme: CompassTheme,
-    category: DuaCategory?,
-    onSourceClick: () -> Unit
+    categoryId: String,
+    theme: CompassTheme
 ) {
-    var count by remember { mutableStateOf(0) }
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+
+    // Counter state — resets whenever we land on a new dua (keyed by id)
+    var count by remember(dua.id) { mutableStateOf(0) }
     val isComplete = count >= dua.targetCount
 
-    val context = LocalContext.current
-    val mediaPlayer = remember { android.media.MediaPlayer() }
-    var isPlaying by remember { mutableStateOf(false) }
-    var duration by remember { mutableStateOf("0:00") }
+    // Audio state — all keyed to dua.id so they reset on swipe
+    var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
+    var isPlaying by remember(dua.id) { mutableStateOf(false) }
+    var isAudioReady by remember(dua.id) { mutableStateOf(false) }
+    var isAudioMissing by remember(dua.id) { mutableStateOf(false) }
+    var audioDuration by remember(dua.id) { mutableStateOf("") }
 
-    val audioUrl = "https://github.com/AhmadMorningstar/Islam/raw/refs/heads/main/app/src/main/assets/Dua/content/audio/${category?.id}/${dua.audioUrl}"
+    // ---------------------------------------------------------------------------
+    // MEDIA PLAYER LIFECYCLE
+    // A fresh player is created for each dua.id and fully released on dispose.
+    // This prevents crashes from fast swiping or concurrent playback.
+    // ---------------------------------------------------------------------------
+    DisposableEffect(dua.id) {
+        if (dua.audioFileName.isEmpty()) {
+            return@DisposableEffect onDispose { }
+        }
 
+        val player = MediaPlayer()
+        mediaPlayer = player
 
-    LaunchedEffect(dua.id) {
-        try {
-            mediaPlayer.reset()
-            mediaPlayer.setDataSource(audioUrl)
-            mediaPlayer.prepareAsync()
-            mediaPlayer.setOnPreparedListener { mp ->
-                val seconds = mp.duration / 1000
-                duration = String.format("%d:%02d", seconds / 60, seconds % 60)
+        val audioFile = File(
+            context.filesDir,
+            "Dua/content/audio/$categoryId/${dua.audioFileName}"
+        )
+
+        if (audioFile.exists()) {
+            try {
+                player.setDataSource(audioFile.absolutePath)
+                player.prepareAsync()
+                player.setOnPreparedListener { mp ->
+                    isAudioReady = true
+                    val secs = mp.duration / 1000
+                    audioDuration = "${secs / 60}:${String.format("%02d", secs % 60)}"
+                }
+                player.setOnCompletionListener {
+                    isPlaying = false
+                }
+                player.setOnErrorListener { _, _, _ ->
+                    isAudioMissing = true
+                    false
+                }
+            } catch (e: Exception) {
+                isAudioMissing = true
+                player.release()
+                mediaPlayer = null
             }
-            mediaPlayer.setOnCompletionListener { isPlaying = false }
-        } catch (e: Exception) { duration = "Error" }
-    }
+        } else {
+            // File not yet downloaded
+            isAudioMissing = true
+            player.release()
+            mediaPlayer = null
+        }
 
-    // Clean up player when leaving screen
-    DisposableEffect(Unit) {
         onDispose {
-            mediaPlayer.release()
+            player.release()
+            mediaPlayer = null
         }
     }
 
+    // ---------------------------------------------------------------------------
+    // FLASHCARD CONTENT
+    // ---------------------------------------------------------------------------
 
     Column(
         modifier = Modifier
@@ -371,325 +570,555 @@ fun FlashcardView(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+
         // Arabic Text Box
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = theme.surfaceColor,
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, theme.textColor.copy(0.05f))
+            border = BorderStroke(1.dp, theme.textColor.copy(0.07f))
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     text = dua.title,
                     color = theme.needleAlignedColor,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 Text(
                     text = dua.arabic,
                     color = theme.textColor,
-                    fontSize = 28.sp,
-                    lineHeight = 44.sp,
+                    fontSize = 26.sp,
+                    lineHeight = 42.sp,
                     textAlign = TextAlign.Right,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Play/Pause Button
-            Surface(
-                modifier = Modifier.size(50.dp).clickable {
-                    if (isPlaying) mediaPlayer.pause() else mediaPlayer.start()
-                    isPlaying = !isPlaying
-                },
-                shape = CircleShape,
-                color = theme.needleAlignedColor.copy(0.2f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(if (isPlaying) "⏸" else "▶", color = theme.needleAlignedColor, fontSize = 20.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Main Tap Counter
-            Surface(
-                modifier = Modifier.size(80.dp).clickable(enabled = !isComplete) { count++ },
-                shape = CircleShape,
-                color = if (isComplete) theme.needleAlignedColor else theme.surfaceColor,
-                border = BorderStroke(2.dp, theme.needleAlignedColor)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = if (isComplete) "✓" else "$count / ${dua.targetCount}",
-                        color = if (isComplete) theme.backgroundColor else theme.textColor,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Expandable Sections
-        ExpandableSection("Translation", dua.translation, theme)
-        ExpandableSection("Transliteration", dua.transliteration, theme)
-        if (dua.virtue.isNotEmpty()) ExpandableSection("Virtue", dua.virtue, theme)
-        if (dua.explanation.isNotEmpty()) ExpandableSection("Explanation", dua.explanation, theme)
-
-        // Bottom Action Buttons (Source & Audio)
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Button(onClick = onSourceClick, colors = ButtonDefaults.buttonColors(containerColor = theme.textColor.copy(0.1f))) {
-                Text("Verify Authenticity", color = theme.textColor)
-            }
-
-            // Audio Button showing Duration
-            Button(
-                onClick = { /* Already handled by the Play button above */ },
-                colors = ButtonDefaults.buttonColors(containerColor = theme.needleAlignedColor.copy(0.1f))
-            ) {
-                Text("Audio ($duration)", color = theme.needleAlignedColor)
-            }
-
-        }
-    }
-}
-
-@Composable
-fun ExpandableSection(title: String, content: String, theme: CompassTheme) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable { expanded = !expanded },
-        color = Color.Transparent
-    ) {
-        Column(modifier = Modifier.padding(vertical = 12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(title, color = theme.textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(if (expanded) "−" else "+", color = theme.needleAlignedColor, fontSize = 20.sp)
-            }
-
-            AnimatedVisibility(visible = expanded) {
+        // Translation — always visible, never collapsible
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = theme.needleAlignedColor.copy(0.05f),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, theme.needleAlignedColor.copy(0.12f))
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
                 Text(
-                    text = content,
-                    color = theme.textColor.copy(0.8f),
+                    text = "TRANSLATION",
+                    color = theme.needleAlignedColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+                Text(
+                    text = dua.translation,
+                    color = theme.textColor.copy(0.85f),
                     fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    modifier = Modifier.padding(top = 12.dp)
+                    lineHeight = 24.sp
                 )
             }
-
-            Divider(color = theme.textColor.copy(0.05f), modifier = Modifier.padding(top = 16.dp))
         }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Audio + Counter Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            // Audio Player
+            if (dua.audioFileName.isNotEmpty()) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(end = 20.dp)
+                ) {
+                    when {
+                        isAudioMissing -> {
+                            Surface(
+                                shape = CircleShape,
+                                color = theme.textColor.copy(0.05f),
+                                modifier = Modifier.size(50.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("—", color = theme.textColor.copy(0.3f), fontSize = 20.sp)
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Not downloaded",
+                                color = theme.textColor.copy(0.3f),
+                                fontSize = 10.sp
+                            )
+                        }
+                        !isAudioReady -> {
+                            Surface(
+                                shape = CircleShape,
+                                color = theme.textColor.copy(0.05f),
+                                modifier = Modifier.size(50.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        color = theme.needleAlignedColor,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            Surface(
+                                modifier = Modifier
+                                    .size(50.dp)
+                                    .clickable {
+                                        val player = mediaPlayer ?: return@clickable
+                                        if (isPlaying) {
+                                            player.pause()
+                                            isPlaying = false
+                                        } else {
+                                            player.start()
+                                            isPlaying = true
+                                        }
+                                    },
+                                shape = CircleShape,
+                                color = theme.needleAlignedColor.copy(0.15f),
+                                border = BorderStroke(1.dp, theme.needleAlignedColor.copy(0.3f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = if (isPlaying) "⏸" else "▶",
+                                        color = theme.needleAlignedColor,
+                                        fontSize = 18.sp
+                                    )
+                                }
+                            }
+                            if (audioDuration.isNotEmpty()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = audioDuration,
+                                    color = theme.textColor.copy(0.4f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Counter — tap to count, shows ✓ + reset when complete
+            if (isComplete) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        modifier = Modifier.size(80.dp),
+                        shape = CircleShape,
+                        color = theme.needleAlignedColor,
+                        border = BorderStroke(2.dp, theme.needleAlignedColor)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "✓",
+                                color = if (theme.isDark) theme.backgroundColor else Color.White,
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Surface(
+                        modifier = Modifier.clickable { count = 0 },
+                        shape = RoundedCornerShape(10.dp),
+                        color = theme.textColor.copy(0.07f),
+                        border = BorderStroke(1.dp, theme.textColor.copy(0.1f))
+                    ) {
+                        Text(
+                            text = "Reset",
+                            color = theme.textColor.copy(0.55f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clickable { count++ },
+                    shape = CircleShape,
+                    color = theme.surfaceColor,
+                    border = BorderStroke(2.dp, theme.needleAlignedColor)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "$count",
+                                color = theme.textColor,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "/ ${dua.targetCount}",
+                                color = theme.textColor.copy(0.4f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Expandable sections
+        if (dua.transliteration.isNotEmpty()) {
+            DuaExpandableSection("Transliteration", dua.transliteration, theme)
+        }
+        if (dua.virtue.isNotEmpty()) {
+            DuaExpandableSection("Virtue", dua.virtue, theme)
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Verify authenticity link
+        if (dua.sourceUrl.isNotEmpty()) {
+            TextButton(
+                onClick = {
+                    try { uriHandler.openUri(dua.sourceUrl) } catch (e: Exception) { }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Verify Authenticity ↗",
+                    color = theme.textColor.copy(0.4f),
+                    fontSize = 13.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
     }
 }
 
-// Updated to check Internal Storage first, then Assets
-fun loadCategories(context: Context, lang: String): List<DuaCategory> {
-    return try {
-        val file = File(context.filesDir, "Dua/categories.json")
-        val jsonString = if (file.exists()) {
-            file.readText()
-        } else {
-            context.assets.open("Dua/categories.json").bufferedReader().use { it.readText() }
-        }
+// ---------------------------------------------------------------------------
+// EXPANDABLE SECTION
+// ---------------------------------------------------------------------------
 
-        println("=== CATEGORIES JSON CONTENT ===")
-        println(jsonString)
-        println("================================")
+@Composable
+fun DuaExpandableSection(title: String, content: String, theme: CompassTheme) {
+    var expanded by remember { mutableStateOf(false) }
 
-        val array = JSONArray(jsonString)
-        val categories = List(array.length()) { i ->
-            val obj = array.getJSONObject(i)
-            DuaCategory(
-                id = obj.getString("id"),
-                title = if (obj.has(lang)) obj.getString(lang) else obj.getString("en")
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .padding(vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = theme.textColor,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+            Text(
+                text = if (expanded) "−" else "+",
+                color = theme.needleAlignedColor,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Light
             )
         }
 
-        println("Loaded categories: ${categories.joinToString { "${it.id} - ${it.title}" }}")
-        categories
-    } catch (e: Exception) {
-        println("Error loading categories: ${e.message}")
-        emptyList()
+        AnimatedVisibility(visible = expanded) {
+            Text(
+                text = content,
+                color = theme.textColor.copy(0.75f),
+                fontSize = 14.sp,
+                lineHeight = 22.sp,
+                modifier = Modifier.padding(top = 10.dp)
+            )
+        }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 12.dp),
+            thickness = 0.5.dp,
+            color = theme.textColor.copy(0.08f)
+        )
     }
 }
 
-object DuaDownloader {
-    private const val BASE_URL = "https://raw.githubusercontent.com/AhmadMorningstar/Islam/refs/heads/main/app/src/main/assets/Dua"
+// ---------------------------------------------------------------------------
+// DUA CONTENT MANAGER
+// Handles version checking, downloading, and loading all dua content.
+//
+// File layout in app internal storage (survives reboot, deleted on uninstall):
+//   filesDir/
+//     Dua/
+//       dua_version.json         ← local copy; compared against GitHub
+//       categories.json          ← downloaded list of all categories
+//       favorites.json           ← user favorites (managed by DuaPreferences)
+//       content/
+//         morning_adhkar.json
+//         evening_adhkar.json
+//         audio/
+//           morning_adhkar/
+//             m_1_ayat-kursi.mp3
+//           evening_adhkar/
+//             ...
+//
+// dua_version.json format on GitHub (per-category versioning):
+//   { "morning_adhkar": 2, "evening_adhkar": 1 }
+// ---------------------------------------------------------------------------
 
-    suspend fun downloadContent(context: Context, categories: List<DuaCategory>): Boolean {
-        var allSuccessful = true
-        var anySuccessful = false
+object DuaContentManager {
 
+    private const val BASE_URL =
+        "https://raw.githubusercontent.com/AhmadMorningstar/Islam/refs/heads/main/app/src/main/assets/Dua"
+
+    /**
+     * Compares local dua_version.json with the one on GitHub.
+     * Returns the list of category IDs that are outdated or not yet downloaded.
+     * Returns empty list if already up to date or if offline.
+     */
+    suspend fun checkForUpdates(context: Context): List<String> = withContext(Dispatchers.IO) {
+        try {
+            val remoteJson = downloadText("$BASE_URL/dua_version.json")
+                ?: return@withContext emptyList()
+            val remoteVersions = JSONObject(remoteJson)
+
+            val localFile = File(context.filesDir, "Dua/dua_version.json")
+            val localVersions = if (localFile.exists()) {
+                try { JSONObject(localFile.readText()) } catch (e: Exception) { JSONObject() }
+            } else {
+                JSONObject()
+            }
+
+            val outdated = mutableListOf<String>()
+            val keys = remoteVersions.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val remoteV = remoteVersions.getInt(key)
+                val localV = localVersions.optInt(key, -1)
+                if (remoteV > localV) outdated.add(key)
+            }
+            outdated
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * Downloads all content for the given categories:
+     *   1. categories.json
+     *   2. Each category's JSON file
+     *   3. All audio files referenced in those JSONs (skips already cached)
+     *   4. Saves dua_version.json last to mark completion
+     *
+     * Returns true on success, false if a critical step fails.
+     */
+    suspend fun downloadAll(
+        context: Context,
+        categoriesToUpdate: List<String>,
+        onProgress: (done: Int, total: Int) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
             val duaDir = File(context.filesDir, "Dua")
             val contentDir = File(duaDir, "content")
             contentDir.mkdirs()
 
-            // Download categories.json
-            val catFile = File(duaDir, "categories.json")
-            val catSuccess = downloadFile("$BASE_URL/categories.json", catFile)
+            var done = 0
+            // Rough initial total — will expand once we know audio count
+            var total = 1 + categoriesToUpdate.size
+            onProgress(done, total)
 
-            if (!catSuccess) {
-                println("Failed to download categories.json")
-                return false
+            // Step 1: categories.json
+            val catSuccess = downloadToFile(
+                "$BASE_URL/categories.json",
+                File(duaDir, "categories.json")
+            )
+            done++
+            onProgress(done, total)
+            if (!catSuccess) return@withContext false
+
+            // Step 2: Each category JSON
+            val downloadedCategories = mutableListOf<String>()
+            for (categoryId in categoriesToUpdate) {
+                val success = downloadToFile(
+                    "$BASE_URL/content/$categoryId.json",
+                    File(contentDir, "$categoryId.json")
+                )
+                if (success) downloadedCategories.add(categoryId)
+                done++
+                onProgress(done, total)
             }
 
-            // Parse categories
-            val realCategories = try {
-                val jsonString = catFile.readText()
-                val array = JSONArray(jsonString)
-                List(array.length()) { i ->
-                    val obj = array.getJSONObject(i)
-                    obj.getString("id")
-                }
-            } catch (e: Exception) {
-                println("Error parsing categories.json: ${e.message}")
-                categories.filter { !it.isFavoriteFolder }.map { it.id }
-            }
-
-            // Download each category's JSON file
-            realCategories.forEach { categoryId ->
-                val targetFile = File(contentDir, "$categoryId.json")
-                val url = "$BASE_URL/content/$categoryId.json"
-
-                println("Attempting to download: $url")
-
-                val success = downloadFile(url, targetFile)
-                if (success) {
-                    anySuccessful = true
-                    if (targetFile.length() > 0) {
-                        try {
-                            val array = JSONArray(targetFile.readText())
-                            println("✅ Successfully downloaded $categoryId.json with ${array.length()} items")
-                        } catch (e: Exception) {
-                            println("⚠️ $categoryId.json is invalid JSON, deleting...")
-                            targetFile.delete()
-                            allSuccessful = false
+            // Step 3: Scan JSONs for audio filenames
+            val audioJobs = mutableListOf<Pair<String, File>>()
+            for (categoryId in downloadedCategories) {
+                val jsonFile = File(contentDir, "$categoryId.json")
+                if (!jsonFile.exists()) continue
+                try {
+                    val array = JSONArray(jsonFile.readText())
+                    val audioDir = File(contentDir, "audio/$categoryId").also { it.mkdirs() }
+                    for (i in 0 until array.length()) {
+                        val audioFileName = array.getJSONObject(i).optString("aud", "")
+                        if (audioFileName.isNotEmpty()) {
+                            val localAudio = File(audioDir, audioFileName)
+                            if (!localAudio.exists()) {
+                                val url = "$BASE_URL/content/audio/$categoryId/$audioFileName"
+                                audioJobs.add(url to localAudio)
+                            }
                         }
-                    } else {
-                        println("⚠️ $categoryId.json is empty, deleting...")
-                        targetFile.delete()
-                        allSuccessful = false
                     }
-                } else {
-                    println("⚠️ Failed to download $categoryId.json (might not exist yet)")
-                    // Don't mark allSuccessful as false for missing files
-                    // Just continue with what we have
-                }
+                } catch (e: Exception) { /* skip malformed JSON */ }
             }
 
-            // Create lock file if at least one file was downloaded successfully
-            if (anySuccessful) {
-                File(duaDir, "downloaded.lock").createNewFile()
-                println("✅ Download completed with some files (lock file created)")
-            } else {
-                println("❌ No files were downloaded successfully")
-                return false
+            // Update total now that we know audio count (+1 for version file at the end)
+            total = done + audioJobs.size + 1
+            onProgress(done, total)
+
+            // Step 4: Download audio files
+            for ((url, file) in audioJobs) {
+                downloadToFile(url, file)
+                done++
+                onProgress(done, total)
             }
 
-            return true
+            // Step 5: Save version file last — this marks the download as complete
+            val remoteVersionJson = downloadText("$BASE_URL/dua_version.json")
+            if (remoteVersionJson != null) {
+                File(duaDir, "dua_version.json").writeText(remoteVersionJson)
+            }
+            done++
+            onProgress(done, total)
+
+            true
         } catch (e: Exception) {
-            println("Download error: ${e.message}")
-            e.printStackTrace()
-            return false
-        }
-    }
-
-    private fun downloadFile(url: String, target: File): Boolean {
-        return try {
-            val connection = java.net.URL(url).openConnection()
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
-
-            val responseCode = (connection as? java.net.HttpURLConnection)?.responseCode
-            if (responseCode != null && responseCode != 200) {
-                println("HTTP error $responseCode for $url")
-                return false
-            }
-
-            connection.getInputStream().use { input ->
-                target.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-
-            target.exists() && target.length() > 0
-        } catch (e: Exception) {
-            println("Download error for $url: ${e.message}")
             false
         }
     }
-}
 
-fun loadDuasFromJson(context: Context, categoryId: String, lang: String): List<DuaItem> {
-    return try {
-        val file = File(context.filesDir, "Dua/content/$categoryId.json")
-        println("Loading duas from: ${file.absolutePath}, exists: ${file.exists()}")
+    /**
+     * Loads category list. Checks internal storage first, falls back to app assets.
+     * Also fetches the dua count for each category to show the badge.
+     */
+    fun loadCategories(context: Context, lang: String): List<DuaCategory> {
+        return try {
+            val file = File(context.filesDir, "Dua/categories.json")
+            val json = if (file.exists()) file.readText()
+            else context.assets.open("Dua/categories.json").bufferedReader().use { it.readText() }
 
-        val jsonString = if (file.exists()) {
-            file.readText()
-        } else {
-            println("File not found, falling back to assets")
-            context.assets.open("Dua/content/$categoryId.json").bufferedReader().use { it.readText() }
+            val array = JSONArray(json)
+            List(array.length()) { i ->
+                val obj = array.getJSONObject(i)
+                val id = obj.getString("id")
+                DuaCategory(
+                    id = id,
+                    title = if (obj.has(lang)) obj.getString(lang) else obj.getString("en"),
+                    duaCount = getDuaCount(context, id)
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
+    }
 
-        println("JSON string length: ${jsonString.length}")
-        println("JSON preview: ${jsonString.take(100)}...")
+    private fun getDuaCount(context: Context, categoryId: String): Int {
+        return try {
+            val file = File(context.filesDir, "Dua/content/$categoryId.json")
+            val json = if (file.exists()) file.readText()
+            else context.assets.open("Dua/content/$categoryId.json").bufferedReader().use { it.readText() }
+            JSONArray(json).length()
+        } catch (e: Exception) { 0 }
+    }
 
-        val array = JSONArray(jsonString)
-        println("Array length: ${array.length()}")
+    /**
+     * Loads all duas for a category. Internal storage first, assets as fallback.
+     */
+    fun loadDuas(context: Context, categoryId: String, lang: String): List<DuaItem> {
+        return try {
+            val file = File(context.filesDir, "Dua/content/$categoryId.json")
+            val json = if (file.exists()) file.readText()
+            else context.assets.open("Dua/content/$categoryId.json").bufferedReader().use { it.readText() }
 
-        val list = mutableListOf<DuaItem>()
-
-        for (i in 0 until array.length()) {
-            val obj = array.getJSONObject(i)
-            list.add(
+            val array = JSONArray(json)
+            List(array.length()) { i ->
+                val obj = array.getJSONObject(i)
                 DuaItem(
                     id = obj.getString("id"),
-                    title = obj.getJSONObject("title").optString(lang, obj.getJSONObject("title").getString("en")),
+                    title = obj.getJSONObject("title").let {
+                        if (it.has(lang)) it.getString(lang) else it.getString("en")
+                    },
                     arabic = obj.getString("ar"),
-                    translation = obj.getJSONObject("trans").optString(lang, obj.getJSONObject("trans").getString("en")),
-                    transliteration = obj.getJSONObject("lat").optString(lang, obj.getJSONObject("lat").getString("en")),
-                    virtue = obj.getJSONObject("virt").optString(lang, ""),
-                    explanation = "",
+                    translation = obj.getJSONObject("trans").let {
+                        if (it.has(lang)) it.getString(lang) else it.getString("en")
+                    },
+                    transliteration = obj.getJSONObject("lat").let {
+                        if (it.has(lang)) it.getString(lang) else it.getString("en")
+                    },
+                    virtue = obj.optJSONObject("virt")?.let {
+                        if (it.has(lang)) it.optString(lang, "") else ""
+                    } ?: "",
                     targetCount = obj.getInt("cnt"),
-                    sourceUrl = obj.getString("url"),
-                    audioUrl = obj.optString("aud", "")
+                    sourceUrl = obj.optString("url", ""),
+                    audioFileName = obj.optString("aud", "")
                 )
-            )
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
-        println("Successfully loaded ${list.size} duas for $categoryId")
-        list
-    } catch (e: Exception) {
-        println("ERROR loading $categoryId: ${e.message}")
-        e.printStackTrace()
-        emptyList()
     }
-}
 
-fun playAudio(context: Context, url: String) {
-    try {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "audio/*")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    /**
+     * Loads favorited duas. Auto-scans all categories from categories.json —
+     * no hardcoded list, so adding new categories never breaks this.
+     */
+    fun loadFavorites(context: Context, favoriteIds: Set<String>, lang: String): List<DuaItem> {
+        if (favoriteIds.isEmpty()) return emptyList()
+        return try {
+            val catFile = File(context.filesDir, "Dua/categories.json")
+            val catJson = if (catFile.exists()) catFile.readText()
+            else context.assets.open("Dua/categories.json").bufferedReader().use { it.readText() }
+
+            val allDuas = mutableListOf<DuaItem>()
+            val catArray = JSONArray(catJson)
+            for (i in 0 until catArray.length()) {
+                val categoryId = catArray.getJSONObject(i).getString("id")
+                allDuas.addAll(loadDuas(context, categoryId, lang))
+            }
+            allDuas.filter { it.id in favoriteIds }
+        } catch (e: Exception) {
+            emptyList()
         }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        // Fallback: Open in Browser if no player found
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        context.startActivity(browserIntent)
+    }
+
+    private fun downloadText(urlStr: String): String? {
+        return try {
+            val conn = URL(urlStr).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 15_000
+            if (conn.responseCode != 200) return null
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } catch (e: Exception) { null }
+    }
+
+    private fun downloadToFile(urlStr: String, target: File): Boolean {
+        return try {
+            val conn = URL(urlStr).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 30_000
+            if (conn.responseCode != 200) return false
+            target.parentFile?.mkdirs()
+            conn.inputStream.use { input -> target.outputStream().use { input.copyTo(it) } }
+            target.exists() && target.length() > 0
+        } catch (e: Exception) { false }
     }
 }

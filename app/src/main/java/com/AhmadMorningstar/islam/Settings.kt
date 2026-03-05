@@ -15,14 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.AhmadMorningstar.islam.security.SignatureVerifier
 import java.util.TimeZone
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 
 @Composable
 fun SettingsUI(
@@ -30,8 +27,8 @@ fun SettingsUI(
     onThemeSelected: (CompassTheme) -> Unit,
     currentRegion: String,
     onRegionSelected: (String) -> Unit,
-    currentLanguage: String,
-    onLanguageSelected: (String) -> Unit
+    currentLang: String,
+    onLangSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
     val regions = listOf(
@@ -44,19 +41,16 @@ fun SettingsUI(
     val isSignatureValid = remember {
         SignatureVerifier.isSignatureValid(context)
     }
-    val prefs = remember { ThemePreferences(context) }
 
-    var selectedLang by remember { mutableStateOf(prefs.getSavedLanguage()) }
+    val prefs = remember { ThemePreferences(context) }
 
     var isVibEnabled by remember { mutableStateOf(prefs.isVibrationEnabled()) }
     var currentStrength by remember { mutableStateOf(prefs.getVibStrength().toFloat()) }
     var currentSpeed by remember { mutableStateOf(prefs.getVibSpeed().toFloat()) }
 
     // Timezone Logic (Highly Optimized)
-    var selectedTimezone by remember { mutableStateOf(prefs.getSavedTimezone()) }
+    var selectedTz by remember { mutableStateOf(prefs.getSavedTimezone()) }
     var searchQuery by remember { mutableStateOf("") }
-
-
 
     val allTzIds = remember { TimeZone.getAvailableIDs().toList() }
     val filteredTz = remember(searchQuery) {
@@ -73,7 +67,7 @@ fun SettingsUI(
             .padding(top = 40.dp, bottom = 100.dp)
     ) {
         Text(
-            text = stringResource(id = R.string.settings_label),
+            text = "Settings",
             fontSize = 32.sp,
             fontWeight = FontWeight.ExtraBold,
             color = theme.textColor,
@@ -81,18 +75,18 @@ fun SettingsUI(
         )
 
         // --- TIMEZONE SECTION (FIXED & NON-LAGGY) ---
-        SettingSectionHeader(stringResource(id = R.string.synchronization_label), theme)
+        SettingSectionHeader("Synchronization", theme)
         SettingsCard(theme) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(id = R.string.timezone_label), color = theme.textColor, fontWeight = FontWeight.Bold)
-                Text(stringResource(id = R.string.timezone_active_label) + selectedTimezone, color = theme.needleAlignedColor, fontSize = 12.sp)
+                Text("App Timezone", color = theme.textColor, fontWeight = FontWeight.Bold)
+                Text("Active: $selectedTz", color = theme.needleAlignedColor, fontSize = 12.sp)
 
                 Spacer(Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text(stringResource(id = R.string.search_city_label), color = theme.textColor.copy(0.4f)) },
+                    placeholder = { Text("Search city (e.g. Asia/Baghdad)", color = theme.textColor.copy(0.4f)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true,
@@ -116,7 +110,7 @@ fun SettingsUI(
                                 .fillMaxWidth()
                                 .padding(vertical = 2.dp)
                                 .clickable {
-                                    selectedTimezone = tz
+                                    selectedTz = tz
                                     searchQuery = ""
                                     prefs.saveTimezone(tz)
                                 },
@@ -139,7 +133,7 @@ fun SettingsUI(
 
 
         // --- REGION SECTION ---
-        SettingSectionHeader(stringResource(id = R.string.sectionheader_location_label), theme)
+        SettingSectionHeader("Location", theme)
         SettingsCard(theme) {
             Row(
                 modifier = Modifier
@@ -150,39 +144,50 @@ fun SettingsUI(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(stringResource(id = R.string.prayer_times_area_label), color = theme.textColor, fontWeight = FontWeight.Bold)
+                    Text("Prayer Region", color = theme.textColor, fontWeight = FontWeight.Bold)
                     Text(
                         text = currentRegion.replace("_", " ").uppercase(),
                         color = theme.needleAlignedColor,
                         fontSize = 12.sp
                     )
                 }
-                Text(stringResource(id = R.string.change_label), color = theme.needleAlignedColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Change", color = theme.needleAlignedColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
 
-        Column(modifier = Modifier.padding(16.dp)) {
-            val languages = listOf(
-                "en" to stringResource(id = R.string.language_english_label),
-                "ku" to stringResource(id = R.string.language_kurdish_label),
-                "ar" to stringResource(id = R.string.language_arabic_label)
-            )
-            languages.forEach { (code, label) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val appLocale: LocaleListCompat = LocaleListCompat.forLanguageTags(code)
-                            AppCompatDelegate.setApplicationLocales(appLocale)
-                            onLanguageSelected(code)
-                        }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Read from the passed state, not a local variable
-                    RadioButton(selected = (currentLanguage == code), onClick = null)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(label, color = theme.textColor)
+        Spacer(Modifier.height(32.dp))
+
+        // --- LANGUAGE SECTION ---
+        SettingSectionHeader("Duas Language", theme)
+        SettingsCard(theme) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("en" to "English", "ku" to "Kurdish").forEach { (code, label) ->
+                    val isSelected = currentLang == code
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onLangSelected(code) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) theme.needleAlignedColor.copy(0.15f) else Color.Transparent,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) theme.needleAlignedColor else theme.textColor.copy(0.15f)
+                        )
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSelected) theme.needleAlignedColor else theme.textColor.copy(0.5f),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -191,7 +196,7 @@ fun SettingsUI(
 
 
         // --- HAPTIC FEEDBACK SECTION ---
-        SettingSectionHeader(stringResource(id = R.string.haptic_feedback_label), theme)
+        SettingSectionHeader("Haptic Feedback", theme)
         SettingsCard(theme) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -200,8 +205,8 @@ fun SettingsUI(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text(stringResource(id= R.string.vibration_label), color = theme.textColor, fontWeight = FontWeight.Bold)
-                        Text(stringResource(id= R.string.vibrate_when_facing_kaaba), color = theme.textColor.copy(0.5f), fontSize = 12.sp)
+                        Text("Vibration", color = theme.textColor, fontWeight = FontWeight.Bold)
+                        Text("Vibrate when facing Kaaba", color = theme.textColor.copy(0.5f), fontSize = 12.sp)
                     }
                     Switch(
                         checked = isVibEnabled,
@@ -220,14 +225,12 @@ fun SettingsUI(
                 if (isVibEnabled) {
                     HorizontalDivider(Modifier.padding(vertical = 16.dp), 1.dp, theme.textColor.copy(0.05f))
 
-                    Text(stringResource(id= R.string.vibration_strength_label) + "${currentStrength.toInt()}",
-                    color = theme.textColor,
-                    fontSize = 14.sp)
+                    Text("Strength: ${currentStrength.toInt()}", color = theme.textColor, fontSize = 14.sp)
                     Slider(
                         value = currentStrength,
-                        onValueChange = {
-                            currentStrength = it
-                            prefs.saveVibrationSettings(it.toInt(), currentSpeed.toLong())
+                        onValueChange = { currentStrength = it },
+                        onValueChangeFinished = {
+                            prefs.saveVibrationSettings(currentStrength.toInt(), currentSpeed.toLong())
                         },
                         valueRange = 50f..255f,
                         colors = SliderDefaults.colors(
@@ -237,12 +240,12 @@ fun SettingsUI(
                         )
                     )
 
-                    Text(stringResource(id= R.string.vibration_speed_label) +" ${currentSpeed.toInt()}ms", color = theme.textColor, fontSize = 14.sp)
+                    Text("Pulse Speed: ${currentSpeed.toInt()}ms", color = theme.textColor, fontSize = 14.sp)
                     Slider(
                         value = currentSpeed,
-                        onValueChange = {
-                            currentSpeed = it
-                            prefs.saveVibrationSettings(currentStrength.toInt(), it.toLong())
+                        onValueChange = { currentSpeed = it },
+                        onValueChangeFinished = {
+                            prefs.saveVibrationSettings(currentStrength.toInt(), currentSpeed.toLong())
                         },
                         valueRange = 20f..200f,
                         colors = SliderDefaults.colors(
@@ -258,7 +261,7 @@ fun SettingsUI(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = theme.needleAlignedColor.copy(0.1f))
                     ) {
-                        Text(stringResource(id= R.string.test_haptics_label), color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
+                        Text("Test Haptics", color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -267,7 +270,7 @@ fun SettingsUI(
         Spacer(Modifier.height(32.dp))
 
         // --- APPEARANCE SECTION ---
-        SettingSectionHeader(stringResource(id= R.string.header_app_appearance_label), theme)
+        SettingSectionHeader("App Appearance", theme)
         AppThemes.allThemes.forEach { item ->
             ThemeOptionRow(
                 targetTheme = item,
@@ -280,7 +283,7 @@ fun SettingsUI(
 
         Spacer(Modifier.height(32.dp))
 
-        SettingSectionHeader(stringResource(id= R.string.header_security_label), theme)
+        SettingSectionHeader("Security", theme)
 
         SettingsCard(theme) {
             Row(
@@ -292,13 +295,13 @@ fun SettingsUI(
             ) {
                 Column {
                     Text(
-                        text = stringResource(id= R.string.check_signature_label),
+                        text = "Check Signature",
                         color = theme.textColor,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
                     Text(
-                        text = stringResource(id= R.string.signature_validator_label),
+                        text = "Ensures the app is official",
                         color = theme.textColor.copy(0.5f),
                         fontSize = 12.sp
                     )
@@ -312,12 +315,12 @@ fun SettingsUI(
                         painter = painterResource(
                             id = if (isSignatureValid) R.drawable.ic_verified else R.drawable.ic_malicious
                         ),
-                        contentDescription = if (isSignatureValid) stringResource(id= R.string.check_signature_verified_label) else stringResource(id= R.string.check_signature_malicious_label),
+                        contentDescription = if (isSignatureValid) "Verified" else "Malicious",
                         tint = if (isSignatureValid) theme.verifiedColor else theme.maliciousColor,
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = if (isSignatureValid) stringResource(id= R.string.check_signature_verified_label) else stringResource(id= R.string.check_signature_malicious_label),
+                        text = if (isSignatureValid) "Verified" else "Malicious",
                         color = if (isSignatureValid) theme.verifiedColor else theme.maliciousColor,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
@@ -333,7 +336,7 @@ fun SettingsUI(
             onDismissRequest = { showRegionDialog = false },
             title = {
                 Text(
-                    stringResource(id= R.string.select_region_label),
+                    "Select Region",
                     color = theme.textColor,
                     fontWeight = FontWeight.Bold
                 )
@@ -342,7 +345,7 @@ fun SettingsUI(
             // The Fix: Provide a TextButton instead of an empty lambda {}
             confirmButton = {
                 TextButton(onClick = { showRegionDialog = false }) {
-                    Text(stringResource(id= R.string.cancel_btn_label), color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
+                    Text("CANCEL", color = theme.needleAlignedColor, fontWeight = FontWeight.Bold)
                 }
             },
             text = {

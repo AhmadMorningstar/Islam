@@ -62,30 +62,32 @@ dependencies {
 
     implementation("io.github.cosinekitty:astronomy:2.1.19")
 
+    implementation("androidx.compose.material:material-icons-core")
+
 
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries
 
     // Core Android KTX
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat) // For compatibility
-    implementation(libs.material) // Material Components for Views (if you use any XML layouts)
+    implementation(libs.androidx.appcompat)
+
+    implementation(libs.material)
 
     // Jetpack Compose
-    // Using the latest versions you have declared
-    implementation(libs.activity.compose) // This is likely the newer version (e.g., 1.11.0)
+    implementation(libs.activity.compose)
     implementation(libs.ui)
     implementation(libs.material3)
     implementation(libs.ui.tooling.preview)
     implementation(libs.androidx.compose.ui.text)
-    debugImplementation(libs.androidx.compose.ui.ui.tooling) // Correct debug implementation for tooling
+    debugImplementation(libs.androidx.compose.ui.ui.tooling)
 
     // Lifecycle for Compose
     implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Location & Maps
     // Use the single, newer version of the location library
-    implementation(libs.gms.play.services.location) // This is likely the newer version (e.g., 21.3.0)
+    implementation(libs.gms.play.services.location)
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
 

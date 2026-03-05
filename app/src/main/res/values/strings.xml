@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name_text">Islam</string>
+    <string name="app_name">Islam</string>
     <string name="settings_label">Settings</string>
     <string name="language_english_label">English</string>
     <string name="language_kurdish_label">Kurdish</string>

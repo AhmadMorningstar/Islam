@@ -3,6 +3,7 @@ activityCompose = "1.12.4"
 activityComposeVersion = "1.12.4"
 adhan = "1.2.1"
 agp = "9.0.1"
+appcompatVersion = "1.6.1"
 appUpdate = "2.1.0"
 appUpdateKtx = "2.1.0"
 astronomy = "2.1.19"
@@ -25,9 +26,13 @@ uiToolingVersion = "1.10.4"
 uiVersion = "1.10.4"
 firebase-bom = "34.9.0"
 uiText = "1.10.4"
+workRuntimeKtx = "2.11.1"
+uiautomator = "2.2.0"
+benchmarkMacroJunit4 = "1.2.0-beta01"
 
 [libraries]
 # Firebase BoM with version
+androidx-appcompat-v161 = { module = "androidx.appcompat:appcompat", version.ref = "appcompatVersion" }
 astronomy = { module = "github.cosinekitty:astronomy", version.ref = "astronomy" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
 # Firebase Analytics (no version - managed by BoM)
@@ -59,10 +64,14 @@ play-services-maps = { module = "com.google.android.gms:play-services-maps", ver
 ui = { module = "androidx.compose.ui:ui", version.ref = "uiVersion" }
 ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "uiVersion" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmarkMacroJunit4" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 # Add this line for the Compose Compiler plugin
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+android-test = { id = "com.android.test", version.ref = "agp" }
 
