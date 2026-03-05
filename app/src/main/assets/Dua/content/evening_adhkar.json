@@ -1,10 +1,10 @@
 [
   {
-    "id": "m_1",
+    "id": "n_1",
     "ar": "أَعُوْذُ بِاللّٰهِ...",
-    "cnt": 1,
+    "cnt": 2,
     "url": "https://sunnah.com/hisn:73",
-    "aud": "m_1_ayat-kursi.mp3",
+    "aud": "m_2_bismillah.mp3",
     "title": { "en": "Ayat al-Kursi", "ku": "ئایەتول کورسی" },
     "trans": { "en": "Allah! There is no deity...", "ku": "خواى پەروەردگار..." },
     "lat":   { "en": "Allahu la ilaha illa Huwal...", "ku": "ئەڵڵاهو لا ئیلاهە..." },
