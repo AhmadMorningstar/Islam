@@ -1,13 +1,16 @@
 [
   {
-    "id": "n_1",
-    "ar": "أَعُوْذُ بِاللّٰهِ...",
+    "id": "dhikr_1",
+    "ar": "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ قُلْ هُوَ اللّٰهُ أَحَدٌ ، اَللّٰهُ الصَّمَدُ ، لَمْ يَلِدْ وَلَمْ يُوْلَدْ ، وَلَمْ يَكُنْ لَّهُ كُفُوًا أَحَدٌ\nبِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ قُلْ أَعُوْذُ بِرَبِّ الْفَلَقِ ، مِنْ شَرِّ مَا خَلَقَ ، وَمِنْ شَرِّ غَاسِقٍ إِذَا وَقَبَ ، وَمِنْ شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ ، وَمِنْ شَرِّ حَاسِدٍ إِذَا حَسَدَ\nبِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ قُلْ أَعُوْذُ بِرَبِّ النَّاسِ ، مَلِكِ النَّاسِ ، إِلٰهِ النَّاسِ ، مِنْ شَرِّ الْوَسْوَاسِ الْخَنَّاسِ ، اَلَّذِيْ يُوَسْوِسُ فِيْ صُدُوْرِ النَّاسِ ، مِنَ الْجِنَّةِ وَالنَّاسِ",
     "cnt": 2,
     "url": "https://sunnah.com/hisn:73",
     "aud": "m_2_bismillah.mp3",
-    "title": { "en": "Ayat al-Kursi", "ku": "ئایەتول کورسی" },
-    "trans": { "en": "Allah! There is no deity...", "ku": "خواى پەروەردگار..." },
-    "lat":   { "en": "Allahu la ilaha illa Huwal...", "ku": "ئەڵڵاهو لا ئیلاهە..." },
-    "virt":  { "en": "Protected from Jinn until evening.", "ku": "پارێزراو دەبیت." }
+    "title": { "en": "Be Sufficed in All Your Matters", "ku": "لە هەموو بابەتەکانتدا بەس بە" },
+    "trans": { "en": "In the name of Allah, the All-Merciful, the Very Merciful Say, He is Allah, the One, the Self-Sufficient Master, Who has not given birth and was not born, and to Whom no one is equal In the name of Allah, the All-Merciful, the Very Merciful Say, I seek protection of the Lord of the daybreak, from the evil of what He has created, and from the evil of the darkening night when it settles, and from the evil of the blowers in knots, and from the evil of the envier when he envies In the name of Allah, the All-Merciful, the Very Merciful Say, I seek protection of the Lord of mankind, the King of mankind, the God of mankind, from the evil of the whisperer who withdraws, who whispers in the hearts of mankind, whether they be Jinn or people",
+      "ku": "بەناوی خوای میهرەبان و زۆر میهرەبان بڵێ، ئەو خوایە، تاکە، مامۆستای خۆبژێو، کە لەدایک نەبووە و لەدایک نەبووە و کەس هاوتای نییە لەگەڵیدا بەناوی خوای میهرەبان و زۆر میهرەبان بڵێ: من بەدوای پاراستنی پەروەردگاری ڕۆژدا دەگەڕێم، لە خراپەی ئەو شتانەی کە دروستی کردووە و لە خراپەی شەوی تاریکبوونەوە کاتێک جێگیر دەبێت و لە خراپەی فڕێدەرانی گرێ و لە خراپەی ئیرەییبەر کاتێک ئیرەیی دەبات بەناوی خوای میهرەبان و زۆر میهرەبان بڵێ: من بەدوای پاراستنی پەروەردگاری مرۆڤایەتی، پاشای مرۆڤایەتی، خودای مرۆڤایەتیدا دەگەڕێم، لە خراپەی ئەو چرپەچیەی کە دەکشێتەوە، کە لە دڵی مرۆڤدا چرپە دەکات، جا جین بن یان مرۆڤ" },
+    "lat":   { "en": "Bismi-llāhi-r-Raḥmāni-r-Raḥīm Qul Huwa-llāhu Aḥad Allāhu-ṣ-Ṣamad Lam yalid wa lam yūlad Wa lam yakul-lahū kufuwan aḥad Bismi-llāhi-r-Raḥmāni-r-Raḥīm Qul aʿūdhu bi-Rabbi-l-falaq Min sharri mā khalaq Wa min sharri ghāsiqin idhā waqab Wa min sharri-n-naffāthāti fi-l-ʿuqad Wa min sharri ḥāsidin idhā ḥasad Bismi-llāhi-r-Raḥmāni-r-Raḥīm Qul aʿūdhu bi-Rabbi-n-nās Maliki-n-nās Ilāh-hin-nās Min sharri-l-waswāsi-l-khannās Al-ladhī yuwaswisu fī ṣudūri-n-nās Mina-l-jinnati wa-n-nās",
+      "ku": "" },
+    "virt":  { "en": "Reciting these three Surahs three times in the morning and evening is enough to protect you from all evil and hardship",
+      "ku": "خوێندنی ئەم سێ سوورەتە سێ جار لە بەیانیان و ئێواراندا، بەسە بۆ پاراستنت لە هەموو شەڕ و ناخۆشییەک" }
   }
 ]
