@@ -80,7 +80,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import androidx.activity.SystemBarStyle
-
+import androidx.compose.ui.res.stringResource
 
 
 enum class Screen { Home, Prayer, Dua, Settings }
@@ -319,6 +319,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val savedLang = DuaPreferences(this).getSavedLanguage()
+        applyAppLocale(savedLang)
+
         // Call once — isSignatureValid does crypto work, no reason to call it twice
         val isSignatureValid = SignatureVerifier.isSignatureValid(this)
         if (!isSignatureValid) {
@@ -492,7 +495,9 @@ class MainActivity : ComponentActivity() {
                         Screen.Prayer -> {
                             PrayerTimesUI(
                                 theme = theme,
-                                region = currentRegionState.value
+                                region = currentRegionState.value,
+                                language = currentLangState.value
+
                             )
                         }
 
@@ -516,6 +521,7 @@ class MainActivity : ComponentActivity() {
                                 onLangSelected = { lang ->
                                     currentLangState.value = lang
                                     duaPrefs.saveLanguage(lang)
+                                    applyAppLocale(lang)
                                 }
                             )
                         }
@@ -525,6 +531,18 @@ class MainActivity : ComponentActivity() {
                 // LAYER 2: Your Navigation (stays on top of the content)
                 ModernBottomNav(screen, { currentScreen.value = it }, theme)
             }
+        }
+    }
+
+    private fun applyAppLocale(lang: String) {
+        val localeCode = if (lang == "ku") "ku" else "en"
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            getSystemService(android.app.LocaleManager::class.java)
+                .applicationLocales = android.os.LocaleList.forLanguageTags(localeCode)
+        } else {
+            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+                androidx.core.os.LocaleListCompat.forLanguageTags(localeCode)
+            )
         }
     }
 
@@ -661,7 +679,7 @@ fun ModernBottomNav(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 NavButton(
-                    "Qibla",
+                    stringResource(id = R.string.navbutton_qibla_label),
                     Screen.Home,
                     iconRes = R.drawable.ic_compass,
                     iconColor = theme.compassIconColor,
@@ -669,7 +687,7 @@ fun ModernBottomNav(
                     theme
                 ) { onScreenSelected(Screen.Home) }
                 NavButton(
-                    "Prayers",
+                    stringResource(id = R.string.navbutton_prayers_label),
                     Screen.Prayer,
                     iconRes = R.drawable.ic_prayer_times,
                     iconColor = theme.needleAlignedColor,
@@ -677,7 +695,7 @@ fun ModernBottomNav(
                     theme
                 ) { onScreenSelected(Screen.Prayer) }
                 NavButton(
-                    "Dua & Dhikr",
+                    stringResource(id = R.string.navbutton_duas_and_dhikr_label),
                     Screen.Dua,
                     iconRes = R.drawable.ic_dua,
                     iconColor = theme.needleAlignedColor,
@@ -685,7 +703,7 @@ fun ModernBottomNav(
                     theme
                 ) { onScreenSelected(Screen.Dua) }
                 NavButton(
-                    "Settings",
+                    stringResource(id = R.string.settings_label),
                     Screen.Settings,
                     iconRes = R.drawable.ic_settings,
                     iconColor = theme.settingsIconColor,

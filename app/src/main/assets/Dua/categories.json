@@ -1,4 +1,4 @@
 [
-  { "id": "dua", "en": "Dua", "ku": "دوعا" },
-  { "id": "dhikr", "en": "Dhikr", "ku": "زیکر" }
+  { "id": "morning_adhkar", "en": "Morning Adhkar", "ku": "زیکرەکانی بەیانیان" },
+  { "id": "evening_adhkar", "en": "Evening Adhkar", "ku": "زیکرەکانی ئێواران" }
 ]

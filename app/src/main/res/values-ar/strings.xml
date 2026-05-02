@@ -6,7 +6,7 @@
     <string name="language_kurdish_label">الكردية</string>
     <string name="language_arabic_label">العربية</string>
     <string name="todays_schedule_label">جدول اليوم</string>
-    <string name="up_next_label">الصلاة القادمة: %1$s</string>
+    <string name="up_next_label">"الصلاة القادمة: "</string>
     <string name="remaining_label">متبقي</string>
     <string name="fajr_prayer_label">الفجر</string>
     <string name="sunrise_prayer_label">شروق الشمس</string>
@@ -16,7 +16,7 @@
     <string name="dhuhr_prayer_label">الظهر</string>
     <string name="aligned_kaaba_label">تتماشى مع الكعبة</string>
     <string name="rotate_align_label">تدوير للمحاذاة</string>
-    <string name="distance_to_mecca_label">كيلومترا إلى مكة %1$s</string>
+    <string name="distance_to_mecca_label">كيلومترا إلى مكة</string>
     <string name="gps_active_label">GPS نشط</string>
     <string name="searching_gps_label">بحث نظام تحديد المواقع.</string>
     <string name="qibla_accuracy_label">دقة القبلة</string>
@@ -27,13 +27,13 @@
     <string name="cardinal_directions_n">شمال</string>
     <string name="cardinal_directions_e">شرق</string>
     <string name="cardinal_directions_w">غرب</string>
-    <string name="synchronization_label">التزامن</string>
+    <string name="header_synchronization_label">التزامن</string>
     <string name="timezone_label">المنطقة الزمنية</string>
     <string name="timezone_active_label">نشيط</string>
     <string name="search_city_label">ابحث عن المدينة (مثل آسيا/بغداد)</string>
-    <string name="sectionheader_location_label">موقع</string>
+    <string name="header_location_label">موقع</string>
     <string name="prayer_times_area_label">منطقة أوقات الصلاة</string>
-    <string name="change_label">يتغير</string>
+    <string name="btn_change_label">يتغير</string>
     <string name="haptic_feedback_label">اهتزاز الهاتف</string>
     <string name="vibration_label">اهتزاز</string>
     <string name="vibrate_when_facing_kaaba">يهتز عند مواجهة الكعبة</string>
@@ -46,10 +46,15 @@
     <string name="signature_validator_label">التأكد من أن البرنامج رسمي</string>
     <string name="check_signature_verified_label">تم التحقق منه</string>
     <string name="check_signature_malicious_label">معدل</string>
-    <string name="select_region_label">اختر المدينة</string>
-    <string name="cancel_btn_label">يلغي</string>
+    <string name="select_city_label">اختر المدينة</string>
+    <string name="btn_cancel_label">يلغي</string>
     <string name="title_update_available_label">التحديث متاح</string>
-    <string name="optional_update_btn_update_label">تحديث</string>
-    <string name="optional_update_btn_update_later_label">لاحقاً</string>
+    <string name="btn_optional_update_label">تحديث</string>
+    <string name="btn_optional_update_later_label">لاحقاً</string>
     <string name="forced_update_dialog">التحديث مطلوب</string>
+    <string name="header_app_language_label">زمانی بەرنامە</string>
+    <string name="city_label">مدينة</string>
+    <string name="btn_favorites_label">مفضلاتي ❤️</string>
+    <string name="btn_dark_mode">الوضع الداكن</string>
+    <string name="btn_light_mode">الوضع الضوئي</string>
 </resources>

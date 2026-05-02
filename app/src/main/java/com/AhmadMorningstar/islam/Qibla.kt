@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.hardware.SensorManager
 import androidx.compose.material3.Button
+import androidx.compose.ui.res.stringResource
 import kotlin.math.abs
-import kotlin.math.sqrt
 
 // ---------------------------------------------------------------------------
 // ACTIVITY HELPER
@@ -197,7 +197,7 @@ fun QiblaCompassUI(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = if (location == null) "SEARCHING GPS..." else "GPS ACTIVE",
+                text = if (location == null) stringResource(id = R.string.searching_gps_label) else stringResource(id = R.string.gps_active_label),
                 color = if (location == null) Color.Yellow.copy(0.8f) else theme.textColor.copy(0.4f),
                 fontSize = 10.sp,
                 letterSpacing = 2.sp
@@ -222,7 +222,7 @@ fun QiblaCompassUI(
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (isAligned) "ALIGNED WITH KAABA" else "ROTATE TO ALIGN",
+                    text = if (isAligned) stringResource(id = R.string.aligned_kaaba_label) else stringResource(id = R.string.rotate_align_label),
                     color = if (isAligned) theme.needleAlignedColor else theme.textColor.copy(0.6f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -244,7 +244,7 @@ fun QiblaCompassUI(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            "${distance.toInt()} KM TO MECCA",
+                            "${distance.toInt()}"+ stringResource(id = R.string.distance_to_mecca_label),
                             color = theme.textColor.copy(alpha = 0.7f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -372,7 +372,7 @@ fun CalibrationMeter(strength: Float, accuracy: Int, theme: CompassTheme, modifi
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "COMPASS ACCURACY",
+                stringResource(id = R.string.qibla_accuracy_label),
                 color = theme.textColor.copy(0.4f),
                 fontSize = 9.sp,
                 letterSpacing = 1.sp

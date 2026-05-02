@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -77,6 +78,7 @@ fun DuaUI(theme: CompassTheme, lang: String) {
     var selectedCategory by remember { mutableStateOf<DuaCategory?>(null) }
     var selectedDuaIndex by remember { mutableStateOf(0) }
     var categoryDuas by remember { mutableStateOf<List<DuaItem>>(emptyList()) }
+    val btn_favorites_label_string = stringResource(id = R.string.btn_favorites_label)
 
     // Categories — reloads whenever refreshTrigger increments
     var refreshTrigger by remember { mutableStateOf(0) }
@@ -94,7 +96,7 @@ fun DuaUI(theme: CompassTheme, lang: String) {
         categories = withContext(Dispatchers.IO) {
             val rawCats = DuaContentManager.loadCategories(context, lang)
             val favCount = duaPrefs.getFavorites().size
-            listOf(DuaCategory("fav", "Favorites ❤️", favCount, true)) + rawCats
+            listOf(DuaCategory("fav", btn_favorites_label_string, favCount, true)) + rawCats
         }
     }
 
@@ -380,6 +382,7 @@ fun DuaUI(theme: CompassTheme, lang: String) {
                     FlashcardView(
                         dua = categoryDuas[page],
                         categoryId = selectedCategory?.id ?: "",
+                        lang = lang,
                         theme = theme
                     )
                 }
@@ -492,7 +495,8 @@ fun DuaTitleCard(dua: DuaItem, index: Int, theme: CompassTheme, onClick: () -> U
 fun FlashcardView(
     dua: DuaItem,
     categoryId: String,
-    theme: CompassTheme
+    theme: CompassTheme,
+    lang: String
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -776,7 +780,7 @@ fun FlashcardView(
         Spacer(Modifier.height(20.dp))
 
         // Expandable sections
-        if (dua.transliteration.isNotEmpty()) {
+        if (dua.transliteration.isNotEmpty() && lang == "en") {
             DuaExpandableSection("Transliteration", dua.transliteration, theme)
         }
         if (dua.virtue.isNotEmpty()) {
@@ -867,16 +871,16 @@ fun DuaExpandableSection(title: String, content: String, theme: CompassTheme) {
 //       categories.json          ← downloaded list of all categories
 //       favorites.json           ← user favorites (managed by DuaPreferences)
 //       content/
-//         morning_adhkar.json
-//         evening_adhkar.json
+//         dua.json
+//         dhikr.json
 //         audio/
-//           morning_adhkar/
+//           dua/
 //             m_1_ayat-kursi.mp3
-//           evening_adhkar/
+//           dhikr/
 //             ...
 //
 // dua_version.json format on GitHub (per-category versioning):
-//   { "morning_adhkar": 2, "evening_adhkar": 1 }
+//   { "dua": 2, "dhikr": 1 }
 // ---------------------------------------------------------------------------
 
 object DuaContentManager {
