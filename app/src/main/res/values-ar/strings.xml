@@ -52,7 +52,7 @@
     <string name="btn_optional_update_label">تحديث</string>
     <string name="btn_optional_update_later_label">لاحقاً</string>
     <string name="forced_update_dialog">التحديث مطلوب</string>
-    <string name="header_app_language_label">زمانی بەرنامە</string>
+    <string name="header_app_language_label">لغة البرمجة</string>
     <string name="city_label">مدينة</string>
     <string name="btn_favorites_label">مفضلاتي ❤️</string>
     <string name="btn_dark_mode">الوضع الداكن</string>

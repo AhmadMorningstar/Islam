@@ -52,7 +52,7 @@
     <string name="btn_optional_update_label">نوێکردنەوە</string>
     <string name="btn_optional_update_later_label">دواتر</string>
     <string name="forced_update_dialog">نوێکردنەوە پێویستە</string>
-    <string name="header_app_language_label">لغة البرمجة</string>
+    <string name="header_app_language_label">زمانی بەرنامە</string>
     <string name="city_label">شار</string>
     <string name="btn_favorites_label">دڵخوازەکان ❤️</string>
     <string name="btn_dark_mode">ڕووکاری تاریک</string>
