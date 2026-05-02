@@ -66,19 +66,19 @@ fun LocationRequiredOverlay(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = if (isGpsOff) "GPS is Disabled" else "Location Permission Required",
+                text = if (isGpsOff) stringResource(id = R.string.gps_is_disabled_label) else stringResource(id = R.string.location_permission_required_text),
                 style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 20.sp)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (isGpsOff) "To find the Qibla, your phone's GPS must be on."
-                else "The app needs permission to know where you are.",
+                text = if (isGpsOff) stringResource(id = R.string.app_need_gps_text)
+                else stringResource(id = R.string.app_need_location_permission_text),
                 style = androidx.compose.ui.text.TextStyle(color = Color.Gray),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
             Button(onClick = onActionClick) {
-                Text(if (isGpsOff) "Enable GPS" else "Grant Permission")
+                Text(if (isGpsOff) stringResource(id = R.string.button_enable_gps) else stringResource(id = R.string.grant_permission_text))
             }
         }
     }
@@ -197,7 +197,7 @@ fun QiblaCompassUI(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = if (location == null) stringResource(id = R.string.searching_gps_label) else stringResource(id = R.string.gps_active_label),
+                text = if (location == null) stringResource(id = R.string.searching_gps_label) else stringResource(id = R.string.gps_is_active_label),
                 color = if (location == null) Color.Yellow.copy(0.8f) else theme.textColor.copy(0.4f),
                 fontSize = 10.sp,
                 letterSpacing = 2.sp
@@ -244,7 +244,7 @@ fun QiblaCompassUI(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            "${distance.toInt()}"+ stringResource(id = R.string.distance_to_mecca_label),
+                            "${distance.toInt()}" + " " + stringResource(id = R.string.distance_to_mecca_label),
                             color = theme.textColor.copy(alpha = 0.7f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -386,7 +386,7 @@ fun CalibrationMeter(strength: Float, accuracy: Int, theme: CompassTheme, modifi
         }
         if (isInterfered) {
             Text(
-                "METAL INTERFERENCE",
+                stringResource(id = R.string.metal_interference),
                 color = Color.Red,
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Bold
@@ -416,7 +416,9 @@ fun CalibrationPrompt(theme: CompassTheme) {
             .fillMaxSize()
             .background(theme.backgroundColor.copy(0.95f)), Alignment.Center
     ) {
-        Text("Move Phone in ∞ Shape", color = theme.textColor)
+        Text(
+            stringResource(id = R.string.move_phone_label),
+            color = theme.textColor)
     }
 }
 
@@ -427,6 +429,8 @@ fun DeviceNotFlatPrompt(theme: CompassTheme) {
             .fillMaxSize()
             .background(theme.backgroundColor.copy(0.95f)), Alignment.Center
     ) {
-        Text("Hold Phone Level", color = theme.textColor)
+        Text(
+            stringResource(id = R.string.hold_phone_level_text),
+            color = theme.textColor)
     }
 }

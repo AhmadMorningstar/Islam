@@ -17,7 +17,7 @@
     <string name="aligned_kaaba_label">تتماشى مع الكعبة</string>
     <string name="rotate_align_label">تدوير للمحاذاة</string>
     <string name="distance_to_mecca_label">كيلومترا إلى مكة</string>
-    <string name="gps_active_label">GPS نشط</string>
+    <string name="button_enable_gps">تفعيل GPS</string>
     <string name="searching_gps_label">بحث نظام تحديد المواقع.</string>
     <string name="qibla_accuracy_label">دقة القبلة</string>
     <string name="metal_interference">الأجسام الحديدية تعكر صفو القبلة</string>
@@ -57,4 +57,11 @@
     <string name="btn_favorites_label">مفضلاتي ❤️</string>
     <string name="btn_dark_mode">الوضع الداكن</string>
     <string name="btn_light_mode">الوضع الضوئي</string>
+    <string name="hold_phone_level_text">حافظ على مستوى الهاتف مع الأرض</string>
+    <string name="app_need_gps_text">للعثور على القبلة، يجب أن يكون GPS في هاتفك قيد التشغيل</string>
+    <string name="app_need_location_permission_text">يحتاج التطبيق إلى إذن الوصول إلى نظام تحديد المواقع العالمي (GPS) لمعرفة موقع القبلة</string>
+    <string name="gps_is_disabled_label">GPS غير نشط</string>
+    <string name="gps_is_active_label">GPS نشط</string>
+    <string name="location_permission_required_text">يلزم الحصول على إذن الموقع</string>
+    <string name="grant_permission_text">منح الإذن</string>
 </resources>

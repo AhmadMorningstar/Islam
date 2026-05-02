@@ -17,7 +17,7 @@
     <string name="aligned_kaaba_label">لەگەڵ کەعبەدا ڕێکخرا</string>
     <string name="rotate_align_label">بسووڕێنە بۆ ئەوەی ڕێکبخرێت</string>
     <string name="distance_to_mecca_label">کیلۆمەتر بۆ مەککە</string>
-    <string name="gps_active_label">GPS چالاکە</string>
+    <string name="button_enable_gps">چالاککردنی GPS</string>
     <string name="searching_gps_label">گەڕان بەدوای GPS...</string>
     <string name="qibla_accuracy_label">وردبینی قیبلە</string>
     <string name="metal_interference">شتی ئاسنی قیبلە تێکدەدات</string>
@@ -57,4 +57,11 @@
     <string name="btn_favorites_label">دڵخوازەکان ❤️</string>
     <string name="btn_dark_mode">ڕووکاری تاریک</string>
     <string name="btn_light_mode">دۆخی ڕووناکی</string>
+    <string name="hold_phone_level_text">مۆبایلەکە لە ئاست زەویدا بهێڵەرەوە</string>
+    <string name="app_need_gps_text">بۆ دۆزینەوەی قیبلە دەبێت GPS مۆبایلەکەت داگیرساوە بێت</string>
+    <string name="app_need_location_permission_text">ئەپەکە پێویستی بە مۆڵەتی GPS هەیە بۆ زانینی شوێنی قیبلە</string>
+    <string name="gps_is_disabled_label">GPS چالاک نییە</string>
+    <string name="gps_is_active_label">GPS چالاکە</string>
+    <string name="location_permission_required_text">مۆڵەتی شوێن پێویستە</string>
+    <string name="grant_permission_text">مۆڵەت بدە</string>
 </resources>

@@ -77,7 +77,11 @@ private fun tomorrowLabelFor(language: String): String =
 fun PrayerTimesUI(theme: CompassTheme, region: String, language: String = "en") {
     val context = LocalContext.current
 
-    val is24h = remember { DateFormat.is24HourFormat(context) }
+    val is24h = if (language == "ku") {
+        false
+    } else {
+        DateFormat.is24HourFormat(context)
+    }
 
     var schedule        by remember { mutableStateOf<DaySchedule?>(null) }
     var nextPrayerName  by remember { mutableStateOf("...") }
@@ -388,7 +392,7 @@ private fun formatPrayerTime(rawTime: String, is24h: Boolean, language: String =
             String.format(Locale.US, "%02d:%02d", hour, minute)
         } else {
             val period = when {
-                language == "ku" -> if (hour < 12) "ص" else "م"
+                language == "ku" -> if (hour < 12) "ب.ن" else "د.ن"
                 else             -> if (hour < 12) "AM" else "PM"
             }
             val hour12 = when {

@@ -16,7 +16,7 @@
     <string name="aligned_kaaba_label">ALIGNED WITH KAABA</string>
     <string name="rotate_align_label">ROTATE TO ALIGN</string>
     <string name="distance_to_mecca_label">KM TO MECCA</string>
-    <string name="gps_active_label">GPS ACTIVE</string>
+    <string name="button_enable_gps">Enable GPS</string>
     <string name="searching_gps_label">SEARCHING GPS...</string>
     <string name="qibla_accuracy_label">QIBLA ACCURACY</string>
     <string name="metal_interference">METAL INTERFERENCE</string>
@@ -56,4 +56,11 @@
     <string name="btn_favorites_label">Favorites ❤️</string>
     <string name="btn_dark_mode">Dark Mode</string>
     <string name="btn_light_mode">Light Mode</string>
+    <string name="hold_phone_level_text">Keep the phone level with the ground</string>
+    <string name="app_need_gps_text">To find the Qibla, your phone\'s GPS must be on</string>
+    <string name="app_need_location_permission_text">The App Needs GPS Permission to know the location to qibla</string>
+    <string name="gps_is_disabled_label">GPS IS DISABLED</string>
+    <string name="gps_is_active_label">GPS ACTIVE</string>
+    <string name="location_permission_required_text">Location Permission Required</string>
+    <string name="grant_permission_text">Grant Permission</string>
 </resources>

@@ -244,7 +244,7 @@ fun DuaUI(theme: CompassTheme, lang: String) {
             // ----------------------------------------------------------------
             DuaScreenState.CATEGORIES -> {
                 Text(
-                    text = "Supplications",
+                    text = stringResource(id = R.string.navbutton_duas_and_dhikr_label),
                     fontSize = 32.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = theme.textColor,
